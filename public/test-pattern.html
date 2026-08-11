@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>TV Wall Test Pattern</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  .canvas {
+    width: 2880px;
+    height: 1080px;
+    position: relative;
+    background: #000;
+  }
+  svg { display: block; }
+</style>
+</head>
+<body>
+  <div class="canvas" id="canvas"></div>
+<script>
+  // Static alignment/skew test pattern for the physical wall: one circle
+  // per panel tile, position numbers, and boundary markers at every tile
+  // seam, rendered at the real 2880x1080 output resolution. Load this in
+  // Chrome kiosk mode BEFORE writing app code, per PRD section 4.
+  const WIDTH = 2880;
+  const HEIGHT = 1080;
+  const COLS = 3;
+  const ROWS = 2;
+  const TILE_W = WIDTH / COLS;   // 960
+  const TILE_H = HEIGHT / ROWS;  // 540
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', WIDTH);
+  svg.setAttribute('height', HEIGHT);
+  svg.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(svgNS, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+    return e;
+  }
+
+  // Full-canvas background grid every 100px, faint, for coarse alignment checks.
+  for (let x = 0; x <= WIDTH; x += 100) {
+    svg.appendChild(el('line', { x1: x, y1: 0, x2: x, y2: HEIGHT, stroke: '#222', 'stroke-width': 1 }));
+  }
+  for (let y = 0; y <= HEIGHT; y += 100) {
+    svg.appendChild(el('line', { x1: 0, y1: y, x2: WIDTH, y2: y, stroke: '#222', 'stroke-width': 1 }));
+  }
+
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const position = row * COLS + col + 1;
+      const x0 = col * TILE_W;
+      const y0 = row * TILE_H;
+      const cx = x0 + TILE_W / 2;
+      const cy = y0 + TILE_H / 2;
+
+      // Tile boundary rectangle.
+      svg.appendChild(el('rect', {
+        x: x0 + 2, y: y0 + 2, width: TILE_W - 4, height: TILE_H - 4,
+        fill: 'none', stroke: '#0f0', 'stroke-width': 4,
+      }));
+
+      // Centered circle sized to nearly fill the tile - any crop/skew
+      // shows up immediately as an off-center or clipped ellipse.
+      const r = Math.min(TILE_W, TILE_H) / 2 - 40;
+      svg.appendChild(el('circle', { cx, cy, r, fill: 'none', stroke: '#f0f', 'stroke-width': 6 }));
+      svg.appendChild(el('circle', { cx, cy, r: 6, fill: '#f0f' }));
+
+      // Crosshair at tile center.
+      svg.appendChild(el('line', { x1: cx - 30, y1: cy, x2: cx + 30, y2: cy, stroke: '#fff', 'stroke-width': 2 }));
+      svg.appendChild(el('line', { x1: cx, y1: cy - 30, x2: cx, y2: cy + 30, stroke: '#fff', 'stroke-width': 2 }));
+
+      // Corner boundary markers (L-shapes at each tile corner).
+      const m = 40;
+      const corners = [
+        [x0, y0, 1, 1],
+        [x0 + TILE_W, y0, -1, 1],
+        [x0, y0 + TILE_H, 1, -1],
+        [x0 + TILE_W, y0 + TILE_H, -1, -1],
+      ];
+      corners.forEach(([cxr, cyr, dx, dy]) => {
+        svg.appendChild(el('line', { x1: cxr, y1: cyr, x2: cxr + dx * m, y2: cyr, stroke: '#ff0', 'stroke-width': 5 }));
+        svg.appendChild(el('line', { x1: cxr, y1: cyr, x2: cxr, y2: cyr + dy * m, stroke: '#ff0', 'stroke-width': 5 }));
+      });
+
+      // Position number, large and centered.
+      const text = el('text', {
+        x: cx, y: cy + 18, 'text-anchor': 'middle',
+        'font-family': 'Helvetica, Arial, sans-serif', 'font-size': 160,
+        fill: '#fff', 'font-weight': 'bold',
+      });
+      text.textContent = String(position);
+      svg.appendChild(text);
+    }
+  }
+
+  document.getElementById('canvas').appendChild(svg);
+</script>
+</body>
+</html>

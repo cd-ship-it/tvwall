@@ -1,0 +1,8 @@
+node_modules/
+media/*
+!media/.gitkeep
+credentials/
+.env
+*.log
+.DS_Store
+public/zone-positions.css

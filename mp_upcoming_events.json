@@ -1,0 +1,71 @@
+{
+  "source_url": "https://crosspointchurchsv.org/newsletters/milpitas/",
+  "newsletter_date": "2026-08-08",
+  "generated_at": "2026-08-10",
+  "events": [
+    {
+      "title_zh": "安靜親近神 祈禱會",
+      "title_en": "Quiet Time Prayer Meeting",
+      "date": "Every 2nd and 4th Sunday",
+      "time": "8:10 AM - 8:45 AM",
+      "location": "Room 108",
+      "address": null,
+      "notes": null
+    },
+    {
+      "title_zh": "夏季聖經研讀《當心靈說不出話時，在詩篇中遇見神》",
+      "title_en": "Summer Bible Study: When Words Fail, Meeting God in the Psalms",
+      "date_range": {
+        "start": "2026-07-26",
+        "end": "2026-08-30"
+      },
+      "recurrence": "Sundays",
+      "time": "11:00 AM - 12:30 PM",
+      "location": "Room 104",
+      "address": null,
+      "notes": "8 spots remaining as of newsletter date"
+    },
+    {
+      "title_zh": "2026 夏季吉他中級課程",
+      "title_en": "2026 Summer Guitar Intermediate Lessons",
+      "dates": ["2026-07-26", "2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30", "2026-09-06", "2026-09-13"],
+      "time": "1:30 PM - 2:30 PM",
+      "location": "Room 102A",
+      "address": null,
+      "notes": "Bring your own guitar"
+    },
+    {
+      "title_zh": "國語堂《新約概論》線上聯合聖經學習",
+      "title_en": "Mandarin New Testament Survey (Online)",
+      "dates": ["2026-08-25", "2026-09-01", "2026-09-29", "2026-10-06", "2026-10-13", "2026-10-20"],
+      "recurrence": "Tuesdays",
+      "time": "8:00 PM - 9:30 PM",
+      "location": "Online",
+      "address": null,
+      "speakers": ["Pastor Enmei Wang", "Pastor Xiaoling Mao", "Pastor Zheng Huang"],
+      "notes": null
+    },
+    {
+      "title_zh": "李璧琦音樂生命分享會",
+      "title_en": "A Night of Sharing and Music with Becky Lee",
+      "date": "2026-09-11",
+      "time": "8:00 PM",
+      "location": "Crosspoint Milpitas Campus",
+      "address": null,
+      "notes": null
+    },
+    {
+      "title_zh": "承接恩典邁向使命",
+      "title_en": "Embracing Grace and Marching Toward Our Mission Together",
+      "date": "2026-09-13",
+      "time": "6:00 PM - 9:00 PM",
+      "doors_open": "5:30 PM",
+      "location": "Grand Dynasty",
+      "address": "6164 Bollinger Road, San Jose, CA 95129",
+      "cost": "$80 (dinner)",
+      "special_guest": "Sister Becky Lee",
+      "notes": "Free childcare provided; sign-up required",
+      "signup_url": "https://tmea.us/vs2026/"
+    }
+  ]
+}

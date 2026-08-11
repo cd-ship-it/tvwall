@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>TV Wall - 6 Panel Simulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; font-family: -apple-system, sans-serif; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 960px);
+    grid-template-rows: repeat(2, 540px);
+    gap: 4px;
+    width: fit-content;
+    margin: 20px auto;
+    background: #333;
+  }
+  .tile {
+    position: relative;
+    width: 960px;
+    height: 540px;
+    overflow: hidden;
+    background: #000;
+  }
+  .tile iframe {
+    position: absolute;
+    width: 2880px;
+    height: 1080px;
+    border: none;
+  }
+  .tile .label {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 10;
+    color: #0f0;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  .note {
+    color: #aaa;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+  <div class="grid" id="grid"></div>
+  <div class="note">
+    Dev-only approximation: 6 independent iframes of the real app, each clipped to its 960x540 slice.
+    Panel numbering assumes 1-3 top row (left-to-right), 4-6 bottom row (left-to-right) - adjust to match actual Volanti tile-mode position numbers.
+  </div>
+<script>
+  const COLS = 3;
+  const ROWS = 2;
+  const TILE_W = 960;
+  const TILE_H = 540;
+  const grid = document.getElementById('grid');
+
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const position = row * COLS + col + 1;
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = `Panel ${position}`;
+      tile.appendChild(label);
+
+      const iframe = document.createElement('iframe');
+      iframe.src = '/';
+      iframe.style.left = `-${col * TILE_W}px`;
+      iframe.style.top = `-${row * TILE_H}px`;
+      tile.appendChild(iframe);
+
+      grid.appendChild(tile);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "webcamSchedule": [
+    {
+      "start": "09:00",
+      "end": "10:30",
+      "days": [
+        "Sun"
+      ]
+    }
+  ],
+  "mainSlideDuration": 120,
+  "recentRoundDuration": 8,
+  "eventsDuration": 80,
+  "tickerSpeed": 140,
+  "tickerEnabled": true
+}

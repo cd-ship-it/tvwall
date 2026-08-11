@@ -1,0 +1,249 @@
+/* Fallback defaults only - the real values come from zone-positions.css
+   (auto-generated from wall_template_default.jpg on every server start,
+   see server/services/zonePositions.js), loaded after this file so its
+   :root wins. These defaults only take effect if that generation ever
+   fails AND no previous generated file exists either. */
+:root {
+  --canvas-width: 2880px;
+  --canvas-height: 1080px;
+
+  --middle-x: 706px;
+  --middle-y: 0px;
+  --middle-w: 1468px;
+  --middle-h: 1080px;
+
+  --left-x: 97px;
+  --left-y: 558px;
+  --left-w: 501px;
+  --left-h: 458px;
+
+  --right-top-x: 2274px;
+  --right-top-y: 159px;
+  --right-top-w: 524px;
+  --right-top-h: 256px;
+
+  --right-middle-x: 2274px;
+  --right-middle-y: 460px;
+  --right-middle-w: 524px;
+  --right-middle-h: 256px;
+
+  --right-bottom-x: 2285px;
+  --right-bottom-y: 760px;
+  --right-bottom-w: 524px;
+  --right-bottom-h: 256px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+.wall {
+  position: relative;
+  width: var(--canvas-width);
+  height: var(--canvas-height);
+  background: #000;
+  overflow: hidden;
+}
+
+.wall-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.zone {
+  position: absolute;
+  overflow: hidden;
+  background: #000;
+}
+
+.zone-middle {
+  left: var(--middle-x);
+  top: var(--middle-y);
+  width: var(--middle-w);
+  height: var(--middle-h);
+}
+
+.zone-left {
+  left: var(--left-x);
+  top: var(--left-y);
+  width: var(--left-w);
+  height: var(--left-h);
+}
+
+.zone-right-top {
+  left: var(--right-top-x);
+  top: var(--right-top-y);
+  width: var(--right-top-w);
+  height: var(--right-top-h);
+}
+
+.zone-right-middle {
+  left: var(--right-middle-x);
+  top: var(--right-middle-y);
+  width: var(--right-middle-w);
+  height: var(--right-middle-h);
+}
+
+.zone-right-bottom {
+  left: var(--right-bottom-x);
+  top: var(--right-bottom-y);
+  width: var(--right-bottom-w);
+  height: var(--right-bottom-h);
+}
+
+.media-slot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  background: #000;
+}
+
+.media-slot.visible {
+  display: block;
+}
+
+.fit-contain,
+.fit-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+.fit-contain.visible,
+.fit-cover.visible {
+  display: block;
+}
+
+.fit-contain {
+  object-fit: contain;
+  z-index: 2;
+}
+
+.fit-cover {
+  object-fit: cover;
+}
+
+/* Photos that don't match the box's aspect ratio get a blurred, scaled-up
+   copy of themselves filling the gap behind the full (letterboxed) image,
+   instead of plain black bars. Videos use plain black bars (see .media-slot
+   background) since a blurred video backdrop isn't worth the extra decode. */
+.blur-backdrop {
+  z-index: 1;
+  filter: blur(60px) brightness(0.55);
+  transform: scale(1.15);
+}
+
+#webcam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feed-unavailable {
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 24px;
+  background: #111;
+  color: #ccc;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
+}
+
+.feed-unavailable.visible {
+  display: flex;
+}
+
+.zone-left-events {
+  background: #fff;
+}
+
+.event-card {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  color: #000;
+  overflow: hidden;
+}
+
+.event-title-en {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.event-title-zh {
+  font-size: 20px;
+  font-weight: 500;
+  color: #333;
+}
+
+.event-schedule {
+  font-size: 21px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.event-location {
+  font-size: 19px;
+  color: #333;
+}
+
+.event-notes {
+  font-size: 16px;
+  color: #555;
+  line-height: 1.4;
+}
+
+/* Not one of the template's 5 zones - a full-width overlay bar, always on
+   top (z-index above the wall background and every zone, all of which
+   participate in the default stacking order at z-index:auto/0). */
+.news-ticker {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100px;
+  background: #0057d9;
+  overflow: hidden;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+}
+
+.news-ticker.hidden {
+  display: none;
+}
+
+.news-ticker-track {
+  display: inline-block;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 46px;
+  font-weight: 600;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  will-change: transform;
+}
