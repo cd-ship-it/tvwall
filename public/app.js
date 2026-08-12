@@ -275,6 +275,11 @@ function formatSchedule(event) {
     dateLine = event.recurrence
       ? `${start} - ${end}, ${event.recurrence}`
       : `${start} - ${end} (${event.dates.length} sessions)`;
+  } else if (event.recurrence) {
+    // No date/date_range/dates at all, just a standalone recurrence
+    // description (e.g. "Every 2nd and 4th Sunday") - show it on its own
+    // rather than silently dropping it.
+    dateLine = event.recurrence;
   }
   return [dateLine, event.time].filter(Boolean).join(' · ');
 }

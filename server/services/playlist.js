@@ -71,25 +71,31 @@ function getRecentItems() {
   return scanMediaDir(getRecentDir(), config.recentRoundDuration).filter((item) => item.type === 'image');
 }
 
-// Right boxes ("Recent Moments") - named photo groups, sourced from
 // events.json dropped directly in the campus directory root by driveSync
-// (a loose Drive file, not a zone subfolder - see driveSync.js). Its
-// `recent_events` array is `[{ event_title, photos: [{ id, url }] }]`;
-// each photo's Drive file `id` is resolved back to the local filename
-// driveSync already downloaded into media/<campus>/recent/ via the shared
-// sync manifest, rather than re-fetching from `url` (which would hit
-// Drive on every request and duplicate what's already synced locally).
-function getRecentEvents() {
-  const dir = getCampusDir();
-  const filePath = path.join(dir, 'events.json');
-  if (!fs.existsSync(filePath)) return [];
-
-  let parsed;
+// (a loose Drive file, not a zone subfolder - see driveSync.js). Single
+// source for both the left box's upcoming events (`events`) and the right
+// boxes' "Recent Moments" photo groups (`recent_events`) - re-read from
+// disk on every call (no caching) so a fresh Drive sync shows up
+// immediately, same as every other zone here.
+function loadEventsJson() {
+  const filePath = path.join(getCampusDir(), 'events.json');
+  if (!fs.existsSync(filePath)) return null;
   try {
-    parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch {
-    return [];
+    return null;
   }
+}
+
+// Right boxes ("Recent Moments") - named photo groups from events.json's
+// `recent_events` array: `[{ event_title, photos: [{ id, url }] }]`. Each
+// photo's Drive file `id` is resolved back to the local filename driveSync
+// already downloaded into media/<campus>/recent/ via the shared sync
+// manifest, rather than re-fetching from `url` (which would hit Drive on
+// every request and duplicate what's already synced locally).
+function getRecentEvents() {
+  const parsed = loadEventsJson();
+  if (!parsed) return [];
 
   const recentEvents = Array.isArray(parsed.recent_events) ? parsed.recent_events : [];
   if (recentEvents.length === 0) return [];
@@ -120,31 +126,13 @@ function loadSyncManifest() {
   }
 }
 
-// Left box - upcoming events, sourced from a *_upcoming_events.json file
-// dropped directly in the campus directory (not a Drive-synced subfolder;
-// whatever process generates this file writes there directly - out of
-// scope here, this just reads it). Named per-campus (e.g.
-// mp_upcoming_events.json for milpitas) rather than a fixed filename, so
-// the same glob works across campuses without per-campus config.
+// Left box - upcoming events, from events.json's `events` array (same
+// file as getRecentEvents() above). Malformed/missing file just leaves
+// the box blank until it's fixed, rather than breaking anything else.
 function getUpcomingEvents() {
-  const dir = getCampusDir();
-  let entries = [];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const match = entries.find((e) => e.isFile() && /_upcoming_events\.json$/i.test(e.name));
-  if (!match) return [];
-
-  try {
-    const parsed = JSON.parse(fs.readFileSync(path.join(dir, match.name), 'utf8'));
-    return Array.isArray(parsed.events) ? parsed.events : [];
-  } catch {
-    // Malformed/missing file - left box just shows nothing until it's fixed.
-    return [];
-  }
+  const parsed = loadEventsJson();
+  if (!parsed) return [];
+  return Array.isArray(parsed.events) ? parsed.events : [];
 }
 
 // News ticker - full-width overlay bar at the bottom, on top of every
