@@ -1,6 +1,12 @@
 node_modules/
 media/*
 !media/.gitkeep
+# newsticcker.txt is hand-edited/git-tracked, unlike the rest of media/
+# (which is Drive-synced content) - un-ignore its parent dir so the
+# nested exception below can actually apply.
+!media/milpitas/
+media/milpitas/*
+!media/milpitas/newsticcker.txt
 credentials/
 .env
 *.log
