@@ -1,5 +1,12 @@
 const express = require('express');
-const { getPlaylist, getRecentItems, getUpcomingEvents, getNewsTickerText, loadConfig } = require('../services/playlist');
+const {
+  getPlaylist,
+  getRecentItems,
+  getRecentEvents,
+  getUpcomingEvents,
+  getNewsTickerText,
+  loadConfig,
+} = require('../services/playlist');
 const { state } = require('../state');
 
 const router = express.Router();
@@ -13,6 +20,8 @@ router.get('/state', (req, res) => {
     mode: state.mode,
     playlist: playlist.playlist,
     recent: getRecentItems(),
+    recentEvents: getRecentEvents(),
+    recentRoundDuration: config.recentRoundDuration,
     events: getUpcomingEvents(),
     eventsDuration: config.eventsDuration,
     tickerText: getNewsTickerText(),

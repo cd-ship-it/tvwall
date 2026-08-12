@@ -34,8 +34,11 @@
       <div class="event-card" id="event-card"></div>
     </div>
 
-    <!-- Right boxes ("Recent Moments"): synchronized rotation from
-         media/<campus>/recent/, driven by RecentPlayer in app.js -->
+    <!-- Right boxes ("Recent Moments"): synchronized rotation of named
+         event photo groups from media/<campus>/events.json (falls back to
+         a flat shuffle of media/<campus>/recent/ if that's absent), driven
+         by RecentEventsPlayer in app.js. Title sits above the top box. -->
+    <div class="recent-event-title" id="recent-event-title"></div>
     <div class="zone zone-right-top" id="zone-right-top">
       <img class="fit-contain" id="recent-top" alt="" />
     </div>

@@ -134,30 +134,36 @@ function seededShuffle(arr, seed) {
 // synchronized round: every `roundMs`, all three swap to a new photo at
 // once, on wall-clock-aligned boundaries (Math.floor(Date.now()/roundMs))
 // so independent page loads stay in lockstep without talking to each
-// other. Within a single round the three photos are always distinct (as
-// long as the pool has at least 3) - that's the one hard requirement here,
-// everything else (which 3, in which box) just needs to look random.
-class RecentPlayer {
-  constructor(imageEls) {
+// other.
+//
+// Primary source is `events` - named photo groups from events.json (see
+// getRecentEvents() server-side). Each round shows one event's photos
+// across the three boxes (cycling to fill if an event has fewer than 3)
+// and its title above the top box. Falls back to a flat, untitled shuffle
+// of `pool` (media/<campus>/recent/) when there are no named events, e.g.
+// events.json hasn't been synced yet.
+class RecentEventsPlayer {
+  constructor(imageEls, titleEl) {
     this.imageEls = imageEls;
+    this.titleEl = titleEl;
+    this.events = [];
     this.pool = [];
     this.roundMs = 8000;
     this.timeoutHandle = null;
     this.lastRoundIndex = null;
   }
 
-  setPool(items) {
-    items = items || [];
-    this.pool = items;
-    if (this.pool.length > 0) {
-      this.roundMs = (this.pool[0].duration || 8) * 1000;
-    }
+  setData(events, pool, roundDurationSeconds) {
+    this.events = events || [];
+    this.pool = pool || [];
+    if (roundDurationSeconds) this.roundMs = roundDurationSeconds * 1000;
 
-    if (this.pool.length === 0) {
+    if (this.events.length === 0 && this.pool.length === 0) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
       this.lastRoundIndex = null;
       this.imageEls.forEach((el) => el.classList.remove('visible'));
+      this._setTitle('');
       return;
     }
 
@@ -166,16 +172,19 @@ class RecentPlayer {
     }
   }
 
-  // Picks one item per box for a given round index. If the pool has >=
-  // imageEls.length photos, the picks are always distinct. If not (too few
-  // photos to fill every box uniquely), fills by cycling deterministically
-  // rather than leaving a box blank.
-  _pickForRound(roundIndex) {
-    const n = this.imageEls.length;
-    const seed = hashString(this.pool.map((p) => p.file).join(',')) ^ roundIndex;
-    const shuffled = seededShuffle(this.pool, seed);
-    if (shuffled.length >= n) return shuffled.slice(0, n);
+  _setTitle(text) {
+    this.titleEl.textContent = text;
+    this.titleEl.classList.toggle('visible', !!text);
+  }
 
+  // Shuffles `list` deterministically for this round and returns exactly
+  // imageEls.length picks, cycling through the shuffle to fill every box
+  // even when the list is shorter than that (rather than leaving a box
+  // blank).
+  _fillForRound(list, roundIndex, keyOf) {
+    const n = this.imageEls.length;
+    const seed = hashString(list.map(keyOf).join(',')) ^ roundIndex;
+    const shuffled = seededShuffle(list, seed);
     const picks = [];
     let i = 0;
     while (picks.length < n) {
@@ -186,13 +195,24 @@ class RecentPlayer {
   }
 
   _render(roundIndex) {
-    if (this.pool.length === 0) return;
     this.lastRoundIndex = roundIndex;
-    const picks = this._pickForRound(roundIndex);
-    this.imageEls.forEach((el, i) => {
-      el.src = `/media/recent/${encodeURIComponent(picks[i].file)}`;
-      el.classList.add('visible');
-    });
+
+    if (this.events.length > 0) {
+      const event = this.events[roundIndex % this.events.length];
+      const picks = this._fillForRound(event.photos, roundIndex, (f) => f);
+      this.imageEls.forEach((el, i) => {
+        el.src = `/media/recent/${encodeURIComponent(picks[i])}`;
+        el.classList.add('visible');
+      });
+      this._setTitle(event.title);
+    } else {
+      const picks = this._fillForRound(this.pool, roundIndex, (p) => p.file);
+      this.imageEls.forEach((el, i) => {
+        el.src = `/media/recent/${encodeURIComponent(picks[i].file)}`;
+        el.classList.add('visible');
+      });
+      this._setTitle('');
+    }
   }
 
   // Schedules the next tick for exactly the next wall-clock round boundary
@@ -211,11 +231,14 @@ class RecentPlayer {
   }
 }
 
-const recentPlayer = new RecentPlayer([
-  document.getElementById('recent-top'),
-  document.getElementById('recent-middle'),
-  document.getElementById('recent-bottom'),
-]);
+const recentEventsPlayer = new RecentEventsPlayer(
+  [
+    document.getElementById('recent-top'),
+    document.getElementById('recent-middle'),
+    document.getElementById('recent-bottom'),
+  ],
+  document.getElementById('recent-event-title')
+);
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -491,7 +514,7 @@ async function pollState() {
     const data = await res.json();
 
     middlePlayer.setItems(data.playlist);
-    recentPlayer.setPool(data.recent);
+    recentEventsPlayer.setData(data.recentEvents, data.recent, data.recentRoundDuration);
     eventsPlayer.setEvents(data.events, data.eventsDuration);
     newsTicker.setText(data.tickerText);
     newsTicker.setSpeed(data.tickerSpeed);

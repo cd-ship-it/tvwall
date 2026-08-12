@@ -71,6 +71,55 @@ function getRecentItems() {
   return scanMediaDir(getRecentDir(), config.recentRoundDuration).filter((item) => item.type === 'image');
 }
 
+// Right boxes ("Recent Moments") - named photo groups, sourced from
+// events.json dropped directly in the campus directory root by driveSync
+// (a loose Drive file, not a zone subfolder - see driveSync.js). Its
+// `recent_events` array is `[{ event_title, photos: [{ id, url }] }]`;
+// each photo's Drive file `id` is resolved back to the local filename
+// driveSync already downloaded into media/<campus>/recent/ via the shared
+// sync manifest, rather than re-fetching from `url` (which would hit
+// Drive on every request and duplicate what's already synced locally).
+function getRecentEvents() {
+  const dir = getCampusDir();
+  const filePath = path.join(dir, 'events.json');
+  if (!fs.existsSync(filePath)) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return [];
+  }
+
+  const recentEvents = Array.isArray(parsed.recent_events) ? parsed.recent_events : [];
+  if (recentEvents.length === 0) return [];
+
+  const manifest = loadSyncManifest();
+  const recentDir = getRecentDir();
+
+  return recentEvents
+    .map((ev) => {
+      const photoRefs = Array.isArray(ev.photos) ? ev.photos : [];
+      const files = photoRefs
+        .map((p) => manifest[p.id])
+        .filter((entry) => entry && entry.folder === 'recent')
+        .map((entry) => entry.name)
+        .filter((name) => fs.existsSync(path.join(recentDir, name)));
+      return { title: ev.event_title || '', photos: files };
+    })
+    .filter((ev) => ev.photos.length > 0);
+}
+
+function loadSyncManifest() {
+  const manifestPath = path.join(getMediaDir(), '.sync-manifest.json');
+  if (!fs.existsSync(manifestPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
 // Left box - upcoming events, sourced from a *_upcoming_events.json file
 // dropped directly in the campus directory (not a Drive-synced subfolder;
 // whatever process generates this file writes there directly - out of
@@ -222,6 +271,7 @@ module.exports = {
   getRecentDir,
   getPlaylist,
   getRecentItems,
+  getRecentEvents,
   getUpcomingEvents,
   getNewsTickerText,
   loadConfig,

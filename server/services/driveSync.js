@@ -102,12 +102,41 @@ async function syncDriveFolder() {
         subfolders.map((f) => f.name).join(', ') || '(none)'
       }`
     );
-    if (looseFiles.length > 0) {
+
+    // Loose files sitting directly in the campus folder root aren't a wall
+    // zone, but a loose .json here (e.g. events.json) is legitimate data the
+    // frontend reads directly - sync those straight into the campus root.
+    // Anything else loose is genuinely unplaced content, so it's still just
+    // logged and skipped rather than guessed into a zone.
+    const looseJsonFiles = looseFiles.filter((f) => f.name.toLowerCase().endsWith('.json'));
+    const looseOtherFiles = looseFiles.filter((f) => !f.name.toLowerCase().endsWith('.json'));
+    if (looseOtherFiles.length > 0) {
       console.log(
-        `[drive-sync] WARNING: ${looseFiles.length} file(s) sit directly in the "${campus}" campus folder and are ignored - move them into a subfolder (e.g. "main"): ${looseFiles
+        `[drive-sync] WARNING: ${looseOtherFiles.length} file(s) sit directly in the "${campus}" campus folder and are ignored - move them into a subfolder (e.g. "main"): ${looseOtherFiles
           .map((f) => f.name)
           .join(', ')}`
       );
+    }
+
+    for (const file of looseJsonFiles) {
+      if (file.name.toLowerCase() === 'wall-config.json') {
+        console.log(`[drive-sync]   skip (wall-config.json is git-managed, not Drive-managed): ${file.name}`);
+        continue;
+      }
+
+      seenFiles.push(file.name);
+      const known = manifest[file.id];
+      const destPath = path.join(campusDir, file.name);
+      const needsDownload = !known || known.modifiedTime !== file.modifiedTime || !fs.existsSync(destPath);
+
+      if (needsDownload) {
+        console.log(`[drive-sync]   downloading (campus root): ${file.name}`);
+        await downloadFile(drive, file, destPath);
+        manifest[file.id] = { name: file.name, folder: null, modifiedTime: file.modifiedTime };
+        filesSynced += 1;
+      } else {
+        console.log(`[drive-sync]   up to date: ${file.name}`);
+      }
     }
 
     for (const folder of subfolders) {
