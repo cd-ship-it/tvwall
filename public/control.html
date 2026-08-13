@@ -68,15 +68,15 @@
     <h2>Slide Timing</h2>
     <div class="row">
       <label class="field">
-        Middle box (seconds per photo)
+        Featured (seconds per photo)
         <input type="number" id="main-slide-duration" min="1" step="1" />
       </label>
       <label class="field">
-        Right boxes (seconds per round)
+        Recent (seconds per photo)
         <input type="number" id="recent-round-duration" min="1" step="1" />
       </label>
       <label class="field">
-        Left box (seconds per event)
+        Upcoming (seconds per event)
         <input type="number" id="events-duration" min="1" step="1" />
       </label>
       <label class="field">
@@ -93,11 +93,21 @@
     <div class="status-line">Last sync: <b id="sync-time">-</b></div>
     <div class="status-line">Result: <b id="sync-result">-</b></div>
     <div class="status-line">Files synced last run: <b id="sync-count">-</b></div>
+    <div class="status-line">Files removed last run (deleted from Drive): <b id="sync-pruned">-</b></div>
     <button id="sync-now">Check Now</button>
   </section>
 
   <section>
-    <h2>Playlist (auto-synced from Drive)</h2>
+    <h2>Wall Template Scan</h2>
+    <div class="status-line">Last scan: <b id="scan-time">-</b></div>
+    <div class="status-line">Result: <b id="scan-result">-</b></div>
+    <div class="status-line">Zone sizes: <b id="scan-zones">-</b></div>
+    <button id="scan-now">Scan Template Now</button>
+    <div class="status-line">Rescans <code>wall_template_default.jpg</code> for the current green-box positions. Only needed after replacing that file (a few times a year) - not run automatically on startup.</div>
+  </section>
+
+  <section>
+    <h2>Featured Playlist (auto-synced from Drive)</h2>
     <ul class="playlist" id="playlist-list"></ul>
   </section>
 
@@ -164,6 +174,18 @@ async function refresh() {
       ? '<span class="ok">OK</span>'
       : `<span class="err">Error: ${data.sync.lastSyncError}</span>`;
   document.getElementById('sync-count').textContent = data.sync.filesSynced;
+  document.getElementById('sync-pruned').textContent = data.sync.filesPruned || 0;
+
+  document.getElementById('scan-time').textContent = data.zoneScan.lastScanAt || 'never';
+  document.getElementById('scan-result').innerHTML = data.zoneScan.lastScanOk === null
+    ? '-'
+    : data.zoneScan.lastScanOk
+      ? '<span class="ok">OK</span>'
+      : `<span class="err">Error: ${data.zoneScan.lastScanError}</span>`;
+  const zones = data.zoneScan.zones;
+  document.getElementById('scan-zones').textContent = zones
+    ? `Upcoming ${zones.left.w}×${zones.left.h} · Featured ${zones.middle.w}×${zones.middle.h} · Recent ${zones.right.w}×${zones.right.h}`
+    : '-';
 
   renderItems(document.getElementById('playlist-list'), data.playlist);
   renderWindows(document.getElementById('webcam-windows'), data.webcamSchedule);
@@ -190,6 +212,16 @@ document.getElementById('sync-now').onclick = async (e) => {
   await api('/sync-now', { method: 'POST' });
   e.target.disabled = false;
   e.target.textContent = 'Check Now';
+  refresh();
+};
+
+document.getElementById('scan-now').onclick = async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = 'Scanning...';
+  const result = await api('/scan-template', { method: 'POST' });
+  e.target.disabled = false;
+  e.target.textContent = 'Scan Template Now';
+  if (!result.ok) alert(`Scan failed: ${result.error}`);
   refresh();
 };
 

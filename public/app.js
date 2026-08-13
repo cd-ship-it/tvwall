@@ -2,19 +2,51 @@ const POLL_INTERVAL_MS = 5000;
 const WEBCAM_RETRY_MS = 5000;
 
 // Drives a video/image playlist inside one zone: videos play their natural
-// length (letterboxed with black bars via object-fit: contain), images show
-// for their configured `duration` with a blurred copy of themselves filling
-// the letterbox gap instead of black bars, then it advances and loops.
+// length (letterboxed, gap filled by a blurred backdrop - see
+// _captureVideoFrame), images show for their configured `duration` with a
+// blurred copy of themselves filling the letterbox gap, then it advances
+// and loops.
 class SequencePlayer {
   constructor(videoEl, imageEl, imageBlurEl, baseDir) {
     this.videoEl = videoEl;
     this.imageEl = imageEl;
     this.imageBlurEl = imageBlurEl || null;
-    this.baseDir = baseDir || ''; // Drive zone subfolder, e.g. "main"
+    this.baseDir = baseDir || ''; // Drive zone subfolder, e.g. "featured"
     this.items = [];
     this.currentIndex = -1;
     this.timeoutHandle = null;
+    this._captureCanvas = null;
     this.videoEl.addEventListener('ended', () => this.advance());
+    // First frame is only guaranteed decoded once loadeddata fires (after
+    // currentTime=0 is applied in _play) - captures a touched-up-later
+    // backdrop for videos, the same way a photo's own pixels are already
+    // used as its backdrop (see .blur-backdrop in style.css).
+    this.videoEl.addEventListener('loadeddata', () => this._captureVideoFrame());
+  }
+
+  // Grabs the currently-loaded video frame into a small offscreen canvas
+  // (downscaled - it's going to be blurred via CSS anyway, so full
+  // resolution would just waste decode/encode time) and feeds it into the
+  // same img element used for photo backdrops. Same-origin video
+  // (/media/featured/...) so this never hits a tainted-canvas restriction.
+  _captureVideoFrame() {
+    if (!this.imageBlurEl) return;
+    const vw = this.videoEl.videoWidth;
+    const vh = this.videoEl.videoHeight;
+    if (!vw || !vh) return;
+    try {
+      if (!this._captureCanvas) this._captureCanvas = document.createElement('canvas');
+      const canvas = this._captureCanvas;
+      canvas.width = 320;
+      canvas.height = Math.max(1, Math.round((vh / vw) * 320));
+      canvas.getContext('2d').drawImage(this.videoEl, 0, 0, canvas.width, canvas.height);
+      this.imageBlurEl.src = canvas.toDataURL('image/jpeg', 0.7);
+      this.imageBlurEl.classList.add('visible');
+    } catch {
+      // Capture can fail (decode timing, unusual codec, etc.) - leave the
+      // backdrop hidden and fall back to plain black bars for this item
+      // rather than throwing.
+    }
   }
 
   setItems(items) {
@@ -61,6 +93,9 @@ class SequencePlayer {
 
     if (item.type === 'video') {
       this.imageEl.classList.remove('visible');
+      // Hide the previous item's backdrop (stale frame/photo) until this
+      // video's own first frame is captured on `loadeddata` - see
+      // _captureVideoFrame.
       if (this.imageBlurEl) this.imageBlurEl.classList.remove('visible');
       this.videoEl.classList.add('visible');
       this.videoEl.src = src;
@@ -91,81 +126,47 @@ const middlePlayer = new SequencePlayer(
   document.getElementById('middle-video'),
   document.getElementById('middle-image-fg'),
   document.getElementById('middle-image-blur'),
-  'main'
+  'featured'
 );
 
-// Deterministic PRNG (mulberry32) - same seed always produces the same
-// sequence. Used instead of Math.random() so every independent page load
-// (the six-panel simulator's six unsynchronized iframes, in particular)
-// computes the identical pick for the identical moment, with no
-// cross-instance communication. Math.random() would let each iframe pick
-// independently, and since the "right box middle" zone straddles the
-// simulator's row-3/row-6 tile seam, that showed up as two different
-// photos rendered on either side of the seam within what should be one box.
-function mulberry32(seed) {
-  let s = seed | 0;
-  return function () {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashString(str) {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
-  }
-  return hash >>> 0;
-}
-
-function seededShuffle(arr, seed) {
-  const rand = mulberry32(seed);
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-// Drives the three "Recent Moments" right boxes together as one
-// synchronized round: every `roundMs`, all three swap to a new photo at
-// once, on wall-clock-aligned boundaries (Math.floor(Date.now()/roundMs))
-// so independent page loads stay in lockstep without talking to each
-// other.
+// Drives the Recent zone (right box): every `roundMs`, on wall-clock-
+// aligned boundaries (Math.floor(Date.now()/roundMs)) so independent page
+// loads (e.g. the simulator's iframes) stay in lockstep without talking
+// to each other, it advances to the next photo.
 //
-// Primary source is `events` - named photo groups from events.json (see
-// getRecentEvents() server-side). Each round shows one event's photos
-// across the three boxes (cycling to fill if an event has fewer than 3)
-// and its title above the top box. Falls back to a flat, untitled shuffle
-// of `pool` (media/<campus>/recent/) when there are no named events, e.g.
-// events.json hasn't been synced yet.
+// Slide order from the server (getRecentSlides):
+//   1. titled event photos from events.json (events with no photos skipped)
+//   2. then orphan images in recent/ (untitled - title hidden)
+//   3. if nothing at all → comingSoon ("coming soon" on white)
 class RecentEventsPlayer {
-  constructor(imageEls, titleEl) {
-    this.imageEls = imageEls;
+  constructor(imageEl, titleEl, comingSoonEl) {
+    this.imageEl = imageEl;
     this.titleEl = titleEl;
-    this.events = [];
-    this.pool = [];
+    this.comingSoonEl = comingSoonEl;
+    this.items = []; // [{ title, file }], in display order
     this.roundMs = 8000;
     this.timeoutHandle = null;
     this.lastRoundIndex = null;
+    this.comingSoon = false;
   }
 
-  setData(events, pool, roundDurationSeconds) {
-    this.events = events || [];
-    this.pool = pool || [];
+  setData(slides, roundDurationSeconds, comingSoon) {
+    slides = slides || [];
     if (roundDurationSeconds) this.roundMs = roundDurationSeconds * 1000;
+    this.comingSoon = !!comingSoon || slides.length === 0;
+    this.items = this.comingSoon ? [] : slides;
 
-    if (this.events.length === 0 && this.pool.length === 0) {
+    if (this.comingSoon) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
       this.lastRoundIndex = null;
-      this.imageEls.forEach((el) => el.classList.remove('visible'));
+      this.imageEl.classList.remove('visible');
       this._setTitle('');
+      this.comingSoonEl.classList.add('visible');
       return;
     }
+
+    this.comingSoonEl.classList.remove('visible');
 
     if (!this.timeoutHandle) {
       this._tick();
@@ -173,52 +174,43 @@ class RecentEventsPlayer {
   }
 
   _setTitle(text) {
-    this.titleEl.textContent = text;
-    this.titleEl.classList.toggle('visible', !!text);
+    const hasTitle = !!text;
+    this.titleEl.textContent = text || '';
+    this.titleEl.classList.toggle('visible', hasTitle);
+    if (hasTitle) this._fitTitle();
   }
 
-  // Shuffles `list` deterministically for this round and returns exactly
-  // imageEls.length picks, cycling through the shuffle to fill every box
-  // even when the list is shorter than that (rather than leaving a box
-  // blank).
-  _fillForRound(list, roundIndex, keyOf) {
-    const n = this.imageEls.length;
-    const seed = hashString(list.map(keyOf).join(',')) ^ roundIndex;
-    const shuffled = seededShuffle(list, seed);
-    const picks = [];
-    let i = 0;
-    while (picks.length < n) {
-      picks.push(shuffled[i % shuffled.length]);
-      i++;
+  // Shrink font until the full title fits inside the title box without
+  // chopping characters. Cap height is --recent-title-max-height in CSS
+  // (public/style.css). With height:auto the box grows first; only shrink
+  // when content would exceed that max-height (or overflow width).
+  _fitTitle() {
+    const el = this.titleEl;
+    const maxPx = 28;
+    const minPx = 12;
+    let size = maxPx;
+    el.style.fontSize = `${size}px`;
+    // clientHeight is clamped by max-height; scrollHeight is the unclamped
+    // content height - shrink until they match (plus width check).
+    while (size > minPx && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
+      size -= 1;
+      el.style.fontSize = `${size}px`;
     }
-    return picks;
   }
 
   _render(roundIndex) {
     this.lastRoundIndex = roundIndex;
-
-    if (this.events.length > 0) {
-      const event = this.events[roundIndex % this.events.length];
-      const picks = this._fillForRound(event.photos, roundIndex, (f) => f);
-      this.imageEls.forEach((el, i) => {
-        el.src = `/media/recent/${encodeURIComponent(picks[i])}`;
-        el.classList.add('visible');
-      });
-      this._setTitle(event.title);
-    } else {
-      const picks = this._fillForRound(this.pool, roundIndex, (p) => p.file);
-      this.imageEls.forEach((el, i) => {
-        el.src = `/media/recent/${encodeURIComponent(picks[i].file)}`;
-        el.classList.add('visible');
-      });
-      this._setTitle('');
-    }
+    const item = this.items[roundIndex % this.items.length];
+    this.imageEl.src = `/media/recent/${encodeURIComponent(item.file)}`;
+    this.imageEl.classList.add('visible');
+    this._setTitle(item.title || '');
   }
 
   // Schedules the next tick for exactly the next wall-clock round boundary
   // (not "roundMs from now"), so it can't drift out of phase with other
   // independent instances over a long-running session.
   _tick() {
+    if (!this.items.length) return;
     const now = Date.now();
     const roundIndex = Math.floor(now / this.roundMs);
     if (roundIndex !== this.lastRoundIndex) {
@@ -232,12 +224,9 @@ class RecentEventsPlayer {
 }
 
 const recentEventsPlayer = new RecentEventsPlayer(
-  [
-    document.getElementById('recent-top'),
-    document.getElementById('recent-middle'),
-    document.getElementById('recent-bottom'),
-  ],
-  document.getElementById('recent-event-title')
+  document.getElementById('recent-photo'),
+  document.getElementById('recent-event-title'),
+  document.getElementById('recent-coming-soon')
 );
 
 function escapeHtml(str) {
@@ -345,17 +334,56 @@ class EventsPlayer {
     const roundIndex = Math.floor(now / this.durationMs);
     if (roundIndex !== this.lastRoundIndex) {
       this.lastRoundIndex = roundIndex;
-      const event = this.events[roundIndex % this.events.length];
-      this.el.innerHTML = renderEventCard(event);
+      this._render(roundIndex);
     }
 
     const nextBoundary = (roundIndex + 1) * this.durationMs;
     clearTimeout(this.timeoutHandle);
     this.timeoutHandle = setTimeout(() => this._tick(), nextBoundary - now);
   }
+
+  _render(roundIndex) {
+    const event = this.events[roundIndex % this.events.length];
+    this.el.innerHTML = renderEventCard(event);
+  }
+
+  // DEBUG ONLY - see the click listener below. Steps to the next event
+  // immediately, for eyeballing typography across different title/notes
+  // lengths without waiting out the normal rotation timer. Remove this
+  // method + the listener once done checking.
+  next() {
+    if (!this.events.length) return;
+    this.lastRoundIndex = this.lastRoundIndex === null ? 0 : this.lastRoundIndex + 1;
+    this._render(this.lastRoundIndex);
+    clearTimeout(this.timeoutHandle);
+    this.timeoutHandle = setTimeout(() => this._tick(), this.durationMs);
+  }
 }
 
 const eventsPlayer = new EventsPlayer(document.getElementById('event-card'));
+
+// DEBUG ONLY - click the Upcoming box to manually advance to the next
+// event, for checking typography across different title/notes lengths.
+// Remove this block (and EventsPlayer.next() above) when done debugging.
+(() => {
+  const zoneLeft = document.getElementById('zone-left');
+  zoneLeft.style.cursor = 'pointer';
+  zoneLeft.title = 'DEBUG: click to show next event';
+  zoneLeft.addEventListener('click', () => eventsPlayer.next());
+})();
+
+// DEBUG ONLY - click the Featured box to manually advance to the next
+// playlist item (photo or video), for checking playback without waiting
+// out the normal slide duration / full video length. advance() is
+// SequencePlayer's own normal "move to next item" method (also called on
+// video `ended` and photo timeout), so this just triggers it early -
+// nothing debug-specific to unwind. Remove this block when done debugging.
+(() => {
+  const zoneMiddle = document.getElementById('zone-middle');
+  zoneMiddle.style.cursor = 'pointer';
+  zoneMiddle.title = 'DEBUG: click to advance to next featured item';
+  zoneMiddle.addEventListener('click', () => middlePlayer.advance());
+})();
 
 // Continuous right-to-left marquee, speed in pixels/second (adjustable
 // live from /control - a CSS animation would need its duration
@@ -519,7 +547,7 @@ async function pollState() {
     const data = await res.json();
 
     middlePlayer.setItems(data.playlist);
-    recentEventsPlayer.setData(data.recentEvents, data.recent, data.recentRoundDuration);
+    recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
     eventsPlayer.setEvents(data.events, data.eventsDuration);
     newsTicker.setText(data.tickerText);
     newsTicker.setSpeed(data.tickerSpeed);

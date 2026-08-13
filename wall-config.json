@@ -10,7 +10,7 @@
   ],
   "mainSlideDuration": 120,
   "recentRoundDuration": 8,
-  "eventsDuration": 80,
+  "eventsDuration": 10,
   "tickerSpeed": 140,
   "tickerEnabled": true
 }

@@ -3,6 +3,7 @@ const path = require('path');
 const { getPlaylist, loadConfig, updateSettings } = require('../services/playlist');
 const { state, setOverride, skipToItem } = require('../state');
 const { syncDriveFolder } = require('../services/driveSync');
+const { regenerateZoneCss } = require('../services/zonePositions');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -23,6 +24,7 @@ router.get('/api/status', (req, res) => {
     overrides: state.overrides,
     skip: state.skip,
     sync: state.sync,
+    zoneScan: state.zoneScan,
     webcam: state.webcam,
     playlist: playlist.playlist,
     webcamSchedule: playlist.webcamSchedule,
@@ -93,6 +95,15 @@ router.post('/api/skip', express.json(), (req, res) => {
 router.post('/api/sync-now', async (req, res) => {
   await syncDriveFolder();
   res.json({ ok: true, sync: state.sync });
+});
+
+// Manual-only trigger for the green-box template scan (see server/index.js
+// for why this isn't automatic on boot). Synchronous and fast (a single
+// local JPEG decode), so no need for the async/"in progress" treatment
+// sync-now gets.
+router.post('/api/scan-template', (req, res) => {
+  const result = regenerateZoneCss();
+  res.json({ ok: result.ok, error: result.error, zoneScan: state.zoneScan });
 });
 
 module.exports = router;

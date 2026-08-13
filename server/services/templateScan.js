@@ -2,7 +2,10 @@ const fs = require('fs');
 const jpeg = require('jpeg-js');
 
 const MIN_REGION_AREA = 2000; // ignore small green speckles/noise
-const GREEN_HEX = '#00ff2a';
+// The placeholder green varies a bit between template revisions (seen both
+// #00ff2a and #24ff00) - isGreen() is a fuzzy range check, not an exact
+// match, so it tolerates that. GREEN_LABEL is just for log/error messages.
+const GREEN_LABEL = 'green (~#00ff2a-#24ff00)';
 
 function isGreen(r, g, b) {
   return g > 180 && r < 100 && b < 150 && g > r + 80 && g > b + 60;
@@ -75,16 +78,16 @@ function findGreenRegions(width, height, data) {
   return regions;
 }
 
-// Maps the 5 detected blobs to named zones by shape/position, not by
+// Maps the 3 detected blobs to named zones by shape/position, not by
 // assuming an exact pixel location - so it tolerates the "slight" drift
 // the designer expects between template revisions. Topology must still
-// match (1 big box, 1 left box, 3 stacked right boxes) - a real layout
-// change (different box count/arrangement) throws, on purpose, rather
-// than silently guessing wrong.
+// match (1 big Featured/center, 1 Upcoming/left, 1 Recent/right) - a real
+// layout change (different box count/arrangement) throws, on purpose,
+// rather than silently guessing wrong.
 function classifyZones(regions, canvasWidth) {
-  if (regions.length !== 5) {
+  if (regions.length !== 3) {
     throw new Error(
-      `Expected 5 green (${GREEN_HEX}) zones, found ${regions.length}. ` +
+      `Expected 3 ${GREEN_LABEL} zones, found ${regions.length}. ` +
       'This looks like a structural layout change, not a minor position/size tweak - the zone-classification logic in server/services/templateScan.js needs updating to match.'
     );
   }
@@ -97,16 +100,14 @@ function classifyZones(regions, canvasWidth) {
   const left = rest.filter((r) => r.x + r.w / 2 < half);
   const right = rest.filter((r) => r.x + r.w / 2 >= half);
 
-  if (left.length !== 1 || right.length !== 3) {
+  if (left.length !== 1 || right.length !== 1) {
     throw new Error(
-      `Expected 1 left-side box and 3 right-side boxes among the remaining 4 zones, found ${left.length} left / ${right.length} right. ` +
+      `Expected 1 left-side box and 1 right-side box among the remaining 2 zones, found ${left.length} left / ${right.length} right. ` +
       'This looks like a structural layout change, not a minor position/size tweak.'
     );
   }
 
-  const [rightTop, rightMiddle, rightBottom] = [...right].sort((a, b) => a.y - b.y);
-
-  return { left: left[0], middle, rightTop, rightMiddle, rightBottom };
+  return { left: left[0], middle, right: right[0] };
 }
 
 function scanTemplate(filePath) {

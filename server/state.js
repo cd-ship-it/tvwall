@@ -9,6 +9,18 @@ const state = {
     lastSyncError: null,
     inProgress: false,
     filesSynced: 0,
+    filesPruned: 0,
+  },
+
+  // Green-box template scan status, surfaced on /control. Scanning is
+  // manual-only (triggered from the control panel or `npm run
+  // scan-template`) - see server/index.js - since it only needs to run
+  // when wall_template_default.jpg itself changes, a few times a year.
+  zoneScan: {
+    lastScanAt: null,
+    lastScanOk: null,
+    lastScanError: null,
+    zones: null, // { middle: {w,h}, left: {w,h}, right: {w,h} }
   },
 
   // Operator overrides from /control. Null means "no override, follow
@@ -40,6 +52,10 @@ function setSyncStatus(patch) {
   Object.assign(state.sync, patch);
 }
 
+function setZoneScanStatus(patch) {
+  Object.assign(state.zoneScan, patch);
+}
+
 function setOverride(patch) {
   Object.assign(state.overrides, patch);
 }
@@ -49,4 +65,4 @@ function skipToItem(index) {
   state.skip.nonce += 1;
 }
 
-module.exports = { state, setSyncStatus, setOverride, skipToItem };
+module.exports = { state, setSyncStatus, setZoneScanStatus, setOverride, skipToItem };

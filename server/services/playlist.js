@@ -26,14 +26,14 @@ function getCampusDir() {
   return campus ? path.join(MEDIA_DIR, campus) : MEDIA_DIR;
 }
 
-// media/<campus>/main/ - Drive folder is organized as subfolders per wall
-// zone (main/, recent/, ...) under each campus - driveSync mirrors each
-// into a matching local directory. The middle box plays whatever's here.
-function getMainDir() {
-  return path.join(getCampusDir(), 'main');
+// media/<campus>/featured/ - Featured zone (center). Drive folder is
+// organized as subfolders per wall zone (featured/, recent/) under each
+// campus - driveSync mirrors each into a matching local directory.
+function getFeaturedDir() {
+  return path.join(getCampusDir(), 'featured');
 }
 
-// media/<campus>/recent/ - source for the three "Recent Moments" right boxes.
+// media/<campus>/recent/ - Recent zone (right box) photo pool.
 function getRecentDir() {
   return path.join(getCampusDir(), 'recent');
 }
@@ -64,19 +64,11 @@ function scanMediaDir(dir, imageDuration) {
     .filter(Boolean);
 }
 
-// Recent Moments source pool - photos only for now (the three right boxes
-// are photo slots; skip any video that ends up in recent/).
-function getRecentItems() {
-  const config = loadConfig();
-  return scanMediaDir(getRecentDir(), config.recentRoundDuration).filter((item) => item.type === 'image');
-}
-
 // events.json dropped directly in the campus directory root by driveSync
 // (a loose Drive file, not a zone subfolder - see driveSync.js). Single
-// source for both the left box's upcoming events (`events`) and the right
-// boxes' "Recent Moments" photo groups (`recent_events`) - re-read from
-// disk on every call (no caching) so a fresh Drive sync shows up
-// immediately, same as every other zone here.
+// source for both Upcoming (`events`) and Recent titled groups
+// (`recent_events`) - re-read from disk on every call (no caching) so a
+// fresh Drive sync shows up immediately, same as every other zone here.
 function loadEventsJson() {
   const filePath = path.join(getCampusDir(), 'events.json');
   if (!fs.existsSync(filePath)) return null;
@@ -87,12 +79,21 @@ function loadEventsJson() {
   }
 }
 
-// Right boxes ("Recent Moments") - named photo groups from events.json's
-// `recent_events` array: `[{ event_title, photos: [{ id, url }] }]`. Each
-// photo's Drive file `id` is resolved back to the local filename driveSync
-// already downloaded into media/<campus>/recent/ via the shared sync
-// manifest, rather than re-fetching from `url` (which would hit Drive on
-// every request and duplicate what's already synced locally).
+function loadSyncManifest() {
+  const manifestPath = path.join(getMediaDir(), '.sync-manifest.json');
+  if (!fs.existsSync(manifestPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+// Recent titled groups from events.json's `recent_events` array:
+// `[{ event_title, photos: [{ id, url }] }]`. Each photo's Drive file `id`
+// is resolved back to the local filename driveSync already downloaded into
+// media/<campus>/recent/ via the shared sync manifest. Events with zero
+// resolvable local photos are dropped entirely (no title, no placeholder).
 function getRecentEvents() {
   const parsed = loadEventsJson();
   if (!parsed) return [];
@@ -116,19 +117,41 @@ function getRecentEvents() {
     .filter((ev) => ev.photos.length > 0);
 }
 
-function loadSyncManifest() {
-  const manifestPath = path.join(getMediaDir(), '.sync-manifest.json');
-  if (!fs.existsSync(manifestPath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  } catch {
-    return {};
+// Ordered Recent slideshow for the right box:
+//   1. titled event photos in events.json source order (skip empty events)
+//   2. then orphan images in recent/ not referenced by any event (untitled)
+//   3. if nothing at all → comingSoon (frontend shows "coming soon")
+function getRecentSlides() {
+  const config = loadConfig();
+  const events = getRecentEvents();
+  const referenced = new Set();
+  const slides = [];
+
+  for (const ev of events) {
+    for (const file of ev.photos) {
+      referenced.add(file);
+      slides.push({ title: ev.title, file });
+    }
   }
+
+  const orphans = scanMediaDir(getRecentDir(), config.recentRoundDuration)
+    .filter((item) => item.type === 'image')
+    .filter((item) => !referenced.has(item.file));
+
+  for (const item of orphans) {
+    slides.push({ title: '', file: item.file });
+  }
+
+  return {
+    slides,
+    comingSoon: slides.length === 0,
+    duration: config.recentRoundDuration,
+  };
 }
 
-// Left box - upcoming events, from events.json's `events` array (same
-// file as getRecentEvents() above). Malformed/missing file just leaves
-// the box blank until it's fixed, rather than breaking anything else.
+// Upcoming zone - text cards from events.json's `events` array (same file
+// as getRecentEvents() above). Malformed/missing file just leaves the box
+// blank until it's fixed, rather than breaking anything else.
 function getUpcomingEvents() {
   const parsed = loadEventsJson();
   if (!parsed) return [];
@@ -164,21 +187,20 @@ function getNewsTickerText() {
 }
 
 const DEFAULT_SETTINGS = {
-  mainSlideDuration: DEFAULT_SLIDE_DURATION, // middle box, per image
-  recentRoundDuration: DEFAULT_SLIDE_DURATION, // right boxes, per round (all 3 swap together)
-  eventsDuration: 5, // left box, per event card
+  mainSlideDuration: DEFAULT_SLIDE_DURATION, // Featured zone, per image
+  recentRoundDuration: DEFAULT_SLIDE_DURATION, // Recent zone, per photo
+  eventsDuration: 5, // Upcoming zone, per event card
   tickerSpeed: 30, // news ticker, pixels per second
   tickerEnabled: true, // news ticker on/off, from /control
 };
 
-// Webcam schedule windows and per-zone slide/round durations can't be
-// inferred from a folder of files, so they're still hand-curated - via a
-// small, git-tracked config file local to each machine, editable by hand
-// or through /control (both just read/write this same file). Main content
+// Webcam schedule windows and per-zone slide durations can't be inferred
+// from a folder of files, so they're still hand-curated - via a small,
+// git-tracked config file local to each machine, editable by hand or
+// through /control (both just read/write this same file). Featured content
 // itself stays fully automatic from the Drive sync - only its timing is
-// configurable here. Zone content (left box, right boxes) is
-// template-based, not config-based - each zone reads its own Drive/local
-// subfolder directly.
+// configurable here. Zone content (Upcoming, Recent) is template-based,
+// not config-based - each zone reads its own Drive/local data directly.
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     return { webcamSchedule: [], ...DEFAULT_SETTINGS };
@@ -195,8 +217,8 @@ function loadConfig() {
       tickerEnabled: typeof parsed.tickerEnabled === 'boolean' ? parsed.tickerEnabled : DEFAULT_SETTINGS.tickerEnabled,
     };
   } catch {
-    // Malformed config shouldn't take down the main playlist - fall back
-    // to defaults until it's fixed.
+    // Malformed config shouldn't take down the Featured playlist - fall
+    // back to defaults until it's fixed.
     return { webcamSchedule: [], ...DEFAULT_SETTINGS };
   }
 }
@@ -218,13 +240,14 @@ function updateSettings(patch) {
   return loadConfig();
 }
 
-// Main playlist is auto-built from whatever's in the synced media/main/
-// cache, rebuilt from disk on every call so a Drive sync just shows up with
-// no manual step.
+// Featured playlist is auto-built from whatever's in the synced
+// media/<campus>/featured/ cache, rebuilt from disk on every call so a
+// Drive sync just shows up with no manual step. Alphabetical order;
+// images use mainSlideDuration; videos always play full length.
 function getPlaylist() {
   const config = loadConfig();
   return {
-    playlist: scanMediaDir(getMainDir(), config.mainSlideDuration),
+    playlist: scanMediaDir(getFeaturedDir(), config.mainSlideDuration),
     webcamSchedule: config.webcamSchedule,
   };
 }
@@ -255,11 +278,11 @@ function isWebcamScheduled(webcamSchedule, now = new Date()) {
 module.exports = {
   getMediaDir,
   getCampusDir,
-  getMainDir,
+  getFeaturedDir,
   getRecentDir,
   getPlaylist,
-  getRecentItems,
   getRecentEvents,
+  getRecentSlides,
   getUpcomingEvents,
   getNewsTickerText,
   loadConfig,

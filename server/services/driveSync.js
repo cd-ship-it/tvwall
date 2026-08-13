@@ -20,6 +20,22 @@ function saveManifest(manifest) {
   fs.writeFileSync(SYNC_MANIFEST_PATH, JSON.stringify(manifest, null, 2));
 }
 
+// folder: zone name (e.g. "featured") or null for a loose campus-root file.
+function localPathFor(campusDir, folder, name) {
+  return folder ? path.join(campusDir, folder, name) : path.join(campusDir, name);
+}
+
+function removeLocalFile(fullPath, label) {
+  try {
+    fs.unlinkSync(fullPath);
+    console.log(`[drive-sync]   removed (no longer on Drive): ${label}`);
+    return true;
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn(`[drive-sync]   could not remove ${label}: ${err.message}`);
+    return false;
+  }
+}
+
 async function downloadFile(drive, file, destPath) {
   const dest = fs.createWriteStream(destPath);
   const res = await drive.files.get(
@@ -29,6 +45,33 @@ async function downloadFile(drive, file, destPath) {
   await new Promise((resolve, reject) => {
     res.data.on('end', resolve).on('error', reject).pipe(dest);
   });
+}
+
+// Downloads `file` into campusDir/[folder/]file.name if it's new or changed,
+// tracking it in `manifest` keyed by Drive file id (this id is the source of
+// truth for "did this come from Drive", used later to prune deletions/
+// renames - see syncDriveFolder). If the same file id previously lived under
+// a different name/folder (renamed or moved on Drive), the stale local copy
+// under the old name is removed here rather than left behind as an orphan.
+async function syncOneFile(drive, file, manifest, campusDir, folder, seenFileIds, label) {
+  seenFileIds.add(file.id);
+  const known = manifest[file.id];
+  const destPath = localPathFor(campusDir, folder, file.name);
+
+  if (known && (known.name !== file.name || known.folder !== folder)) {
+    removeLocalFile(localPathFor(campusDir, known.folder, known.name), `${label} (renamed to "${file.name}")`);
+  }
+
+  const needsDownload = !known || known.modifiedTime !== file.modifiedTime || !fs.existsSync(destPath);
+  if (needsDownload) {
+    console.log(`[drive-sync]   downloading: ${label}`);
+    await downloadFile(drive, file, destPath);
+    manifest[file.id] = { name: file.name, folder, modifiedTime: file.modifiedTime };
+    return true;
+  }
+
+  console.log(`[drive-sync]   up to date: ${label}`);
+  return false;
 }
 
 async function listChildren(drive, folderId) {
@@ -63,11 +106,41 @@ async function resolveCampusFolder(drive, rootFolderId, campus) {
   return match;
 }
 
-// Each campus folder is organized as subfolders (e.g. "main", "recent"),
+// Guards against overlapping runs stepping on each other - both read-
+// modify-write the same manifest file and the same local directories, so
+// two runs interleaved (e.g. the node-cron schedule firing while a manual
+// "Check Now" sync is still downloading, or two nodemon dev-restarts close
+// together each kicking off their own startup sync) can otherwise race:
+// one run's prune pass can delete a file the other run just legitimately
+// downloaded, before it gets the chance to re-download it. A second call
+// while one is already in flight just joins that same run instead of
+// starting its own.
+let syncPromise = null;
+
+function syncDriveFolder() {
+  if (syncPromise) {
+    console.log('[drive-sync] sync already in progress - joining that run instead of starting a new one');
+    return syncPromise;
+  }
+  syncPromise = runSync().finally(() => {
+    syncPromise = null;
+  });
+  return syncPromise;
+}
+
+// Each campus folder is organized as subfolders (e.g. "featured", "recent"),
 // one per wall zone - each syncs into the matching local media/<name>/
 // directory. Loose files sitting directly in the campus folder root are
 // intentionally ignored (with a warning) rather than guessed into a zone.
-async function syncDriveFolder() {
+//
+// One-way mirror: Drive is the master copy. Besides downloading new/changed
+// files, every run also prunes local files that this manifest previously
+// pulled from Drive but that Drive no longer has (deleted, or replaced under
+// a new id) - see the prune pass at the end. Local files this manifest never
+// tracked (e.g. on-site fallback uploads via /upload, which land directly in
+// the Featured cache) are deliberately left alone - only Drive-sourced files
+// are ever removed automatically.
+async function runSync() {
   const rootFolderId = process.env.DRIVE_ROOT_FOLDER_ID;
   const campus = process.env.CAMPUS;
 
@@ -86,6 +159,7 @@ async function syncDriveFolder() {
   const manifest = loadManifest();
   let filesSynced = 0;
   const seenFiles = [];
+  const seenFileIds = new Set();
 
   try {
     const drive = getDriveClient();
@@ -112,7 +186,7 @@ async function syncDriveFolder() {
     const looseOtherFiles = looseFiles.filter((f) => !f.name.toLowerCase().endsWith('.json'));
     if (looseOtherFiles.length > 0) {
       console.log(
-        `[drive-sync] WARNING: ${looseOtherFiles.length} file(s) sit directly in the "${campus}" campus folder and are ignored - move them into a subfolder (e.g. "main"): ${looseOtherFiles
+        `[drive-sync] WARNING: ${looseOtherFiles.length} file(s) sit directly in the "${campus}" campus folder and are ignored - move them into a subfolder (e.g. "featured"): ${looseOtherFiles
           .map((f) => f.name)
           .join(', ')}`
       );
@@ -125,18 +199,8 @@ async function syncDriveFolder() {
       }
 
       seenFiles.push(file.name);
-      const known = manifest[file.id];
-      const destPath = path.join(campusDir, file.name);
-      const needsDownload = !known || known.modifiedTime !== file.modifiedTime || !fs.existsSync(destPath);
-
-      if (needsDownload) {
-        console.log(`[drive-sync]   downloading (campus root): ${file.name}`);
-        await downloadFile(drive, file, destPath);
-        manifest[file.id] = { name: file.name, folder: null, modifiedTime: file.modifiedTime };
-        filesSynced += 1;
-      } else {
-        console.log(`[drive-sync]   up to date: ${file.name}`);
-      }
+      const downloaded = await syncOneFile(drive, file, manifest, campusDir, null, seenFileIds, `(campus root): ${file.name}`);
+      if (downloaded) filesSynced += 1;
     }
 
     for (const folder of subfolders) {
@@ -164,29 +228,45 @@ async function syncDriveFolder() {
         }
 
         seenFiles.push(`${zoneName}/${file.name}`);
-        const known = manifest[file.id];
-        const destPath = path.join(localSubdir, file.name);
-        const needsDownload = !known || known.modifiedTime !== file.modifiedTime || !fs.existsSync(destPath);
-
-        if (needsDownload) {
-          console.log(`[drive-sync]   downloading: ${folder.name}/${file.name}`);
-          await downloadFile(drive, file, destPath);
-          manifest[file.id] = { name: file.name, folder: zoneName, modifiedTime: file.modifiedTime };
-          filesSynced += 1;
-        } else {
-          console.log(`[drive-sync]   up to date: ${folder.name}/${file.name}`);
-        }
+        const downloaded = await syncOneFile(
+          drive,
+          file,
+          manifest,
+          campusDir,
+          zoneName,
+          seenFileIds,
+          `${folder.name}/${file.name}`
+        );
+        if (downloaded) filesSynced += 1;
       }
     }
 
+    // One-way mirror prune: any manifest entry we didn't see this run came
+    // from Drive previously and is no longer there (deleted, or superseded
+    // by a different file id) - remove its local copy and forget it. Only
+    // ever touches files this same manifest downloaded in the first place,
+    // so it can't reach out and delete unrelated local content (e.g. an
+    // on-site /upload fallback file that was never Drive's to begin with).
+    let filesPruned = 0;
+    for (const [fileId, entry] of Object.entries(manifest)) {
+      if (seenFileIds.has(fileId)) continue;
+      const label = entry.folder ? `${entry.folder}/${entry.name}` : entry.name;
+      removeLocalFile(localPathFor(campusDir, entry.folder, entry.name), label);
+      delete manifest[fileId];
+      filesPruned += 1;
+    }
+
     saveManifest(manifest);
-    console.log(`[drive-sync] done - ${filesSynced} file(s) downloaded, ${seenFiles.length} total tracked.`);
+    console.log(
+      `[drive-sync] done - ${filesSynced} file(s) downloaded, ${filesPruned} file(s) pruned, ${seenFiles.length} total tracked.`
+    );
     setSyncStatus({
       inProgress: false,
       lastSyncOk: true,
       lastSyncError: null,
       lastSyncAt: new Date().toISOString(),
       filesSynced,
+      filesPruned,
       filesSeen: seenFiles,
     });
   } catch (err) {

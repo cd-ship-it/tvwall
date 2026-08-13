@@ -17,20 +17,13 @@
   --left-w: 501px;
   --left-h: 458px;
 
-  --right-top-x: 2274px;
-  --right-top-y: 159px;
-  --right-top-w: 524px;
-  --right-top-h: 256px;
+  --right-x: 2175px;
+  --right-y: 366px;
+  --right-w: 600px;
+  --right-h: 447px;
 
-  --right-middle-x: 2274px;
-  --right-middle-y: 460px;
-  --right-middle-w: 524px;
-  --right-middle-h: 256px;
-
-  --right-bottom-x: 2285px;
-  --right-bottom-y: 760px;
-  --right-bottom-w: 524px;
-  --right-bottom-h: 256px;
+  --featured-radius: 24px; /* <<< tune Featured (middle) box corner roundness here */
+  --recent-radius: 16px; /* <<< tune Recent (right) box corner roundness here */
 }
 
 * {
@@ -75,39 +68,56 @@ body {
   top: var(--middle-y);
   width: var(--middle-w);
   height: var(--middle-h);
+  border-radius: var(--featured-radius);
 }
 
+/* Transparent, not the .zone default black - Upcoming is a plain text
+   overlay now (no card fill of its own), so the card look and any
+   logo/tagline branding come entirely from wall_background.jpg showing
+   through underneath. */
 .zone-left {
   left: var(--left-x);
   top: var(--left-y);
   width: var(--left-w);
   height: var(--left-h);
+  background: transparent;
 }
 
-/* Sits directly above the top right box, spanning the same x/width -
-   labels whichever "Recent Moments" event is currently showing in the
-   three right boxes. Hidden (no `visible` class) when there's no event
-   title to show, e.g. while falling back to the flat, untitled photo pool. */
+/* Sits directly above the Recent (right) zone, same x/width as the image.
+   Labels the current recent_events title. Hidden (no `visible` class) for
+   orphan photos (no title) and for the "coming soon" empty state.
+
+   TWEAKABLE CAP — change --recent-title-max-height to grow/shrink the
+   allowed title block. The box grows with content up to that cap; JS
+   (RecentEventsPlayer._fitTitle) shrinks the font so the full title
+   always fits without chopping characters. */
 .recent-event-title {
+  --recent-title-max-height: 200px; /* <<< edit this to change the height cap */
+
   position: absolute;
-  left: var(--right-top-x);
-  top: calc(var(--right-top-y) - 46px);
-  width: var(--right-top-w);
-  height: 40px;
+  left: var(--right-x);
+  width: var(--right-w);
+  /* Anchor just above the green box; box grows upward with the title. */
+  top: var(--right-y);
+  transform: translateY(calc(-100% - 8px));
+  max-height: var(--recent-title-max-height);
+  height: auto;
   display: none;
   align-items: center;
   justify-content: center;
-  padding: 0 14px;
+  padding: 8px 14px;
   background: rgba(0, 0, 0, 0.65);
   border-radius: 4px;
   color: #fff;
   font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
+  line-height: 1.25;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
   z-index: 5;
 }
 
@@ -115,25 +125,31 @@ body {
   display: flex;
 }
 
-.zone-right-top {
-  left: var(--right-top-x);
-  top: var(--right-top-y);
-  width: var(--right-top-w);
-  height: var(--right-top-h);
+.zone-right {
+  left: var(--right-x);
+  top: var(--right-y);
+  width: var(--right-w);
+  height: var(--right-h);
+  border-radius: var(--recent-radius);
 }
 
-.zone-right-middle {
-  left: var(--right-middle-x);
-  top: var(--right-middle-y);
-  width: var(--right-middle-w);
-  height: var(--right-middle-h);
+.recent-coming-soon {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: #000;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 36px;
+  font-weight: 600;
+  text-align: center;
+  z-index: 3;
 }
 
-.zone-right-bottom {
-  left: var(--right-bottom-x);
-  top: var(--right-bottom-y);
-  width: var(--right-bottom-w);
-  height: var(--right-bottom-h);
+.recent-coming-soon.visible {
+  display: flex;
 }
 
 .media-slot {
@@ -172,10 +188,11 @@ body {
   object-fit: cover;
 }
 
-/* Photos that don't match the box's aspect ratio get a blurred, scaled-up
-   copy of themselves filling the gap behind the full (letterboxed) image,
-   instead of plain black bars. Videos use plain black bars (see .media-slot
-   background) since a blurred video backdrop isn't worth the extra decode. */
+/* Media that doesn't match the box's aspect ratio gets a blurred, scaled-up
+   copy filling the gap behind the full (letterboxed) foreground, instead of
+   plain black bars. For photos this is just the photo itself; for video,
+   app.js (SequencePlayer) captures the first frame to a canvas and uses
+   that as this same img's src - see the video-frame-capture comment there. */
 .blur-backdrop {
   z-index: 1;
   filter: blur(60px) brightness(0.55);
@@ -202,54 +219,89 @@ body {
   display: flex;
 }
 
-.zone-left-events {
-  background: #fff;
-}
-
+/* Upcoming is a plain text overlay - no card background of its own (see
+   .zone-left above). Text renders directly over whatever wall_background.jpg
+   has baked in at this spot. Colors are white/light-on-dark since that
+   background is expected to be dark; typography here is a starting point,
+   not final (sizes/weights/spacing to be fine-tuned against the real
+   background once it's in place). */
 .event-card {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
   padding: 32px 28px;
   display: flex;
+    /* border: 2px solid;
+    border-color: #ccc; */
   flex-direction: column;
   justify-content: center;
   gap: 12px;
   font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
-  color: #000;
+  color: #fff;
   overflow: hidden;
 }
 
 .event-title-en {
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 38px;
+  font-weight: 400;
   line-height: 1.25;
 }
 
 .event-title-zh {
-  font-size: 20px;
-  font-weight: 500;
-  color: #333;
+  font-size: 38px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .event-schedule {
-  font-size: 21px;
-  font-weight: 600;
-  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-weight: 100;
+  margin-top: 46px;
 }
 
 .event-location {
-  font-size: 19px;
-  color: #333;
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-weight: 100;
+  margin-top: 6px;
+}
+
+
+.event-schedule::before,
+.event-location::before {
+  content: "";
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin-right: 20px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Icons are black line art on transparent PNGs - invert to white so
+     they read against the dark wall_background.jpg like the text. */
+  filter: invert(1);
+}
+
+.event-schedule::before {
+  background-image: url('/icons/clock.png');
+}
+
+
+.event-location::before {
+  background-image: url('/icons/location.png');
 }
 
 .event-notes {
+  display: none;
   font-size: 16px;
-  color: #555;
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1.4;
 }
 
-/* Not one of the template's 5 zones - a full-width overlay bar, always on
+/* Not one of the template's 3 zones - a full-width overlay bar, always on
    top (z-index above the wall background and every zone, all of which
    participate in the default stacking order at z-index:auto/0). */
 .news-ticker {

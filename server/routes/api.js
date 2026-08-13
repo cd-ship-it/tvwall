@@ -1,8 +1,7 @@
 const express = require('express');
 const {
   getPlaylist,
-  getRecentItems,
-  getRecentEvents,
+  getRecentSlides,
   getUpcomingEvents,
   getNewsTickerText,
   loadConfig,
@@ -16,12 +15,13 @@ const router = express.Router();
 router.get('/state', (req, res) => {
   const playlist = getPlaylist();
   const config = loadConfig();
+  const recent = getRecentSlides();
   res.json({
     mode: state.mode,
     playlist: playlist.playlist,
-    recent: getRecentItems(),
-    recentEvents: getRecentEvents(),
-    recentRoundDuration: config.recentRoundDuration,
+    recentSlides: recent.slides,
+    recentComingSoon: recent.comingSoon,
+    recentRoundDuration: recent.duration,
     events: getUpcomingEvents(),
     eventsDuration: config.eventsDuration,
     tickerText: getNewsTickerText(),

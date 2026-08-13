@@ -1,12 +1,12 @@
 const fs = require('fs');
 const express = require('express');
 const multer = require('multer');
-const { getMainDir } = require('../services/playlist');
+const { getFeaturedDir } = require('../services/playlist');
 const { requireAuth } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = getMainDir();
+    const dir = getFeaturedDir();
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },

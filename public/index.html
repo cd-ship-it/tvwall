@@ -28,29 +28,26 @@
       </div>
     </div>
 
-    <!-- Left box: upcoming events, from media/<campus>/events.json's
-         `events` array, driven by EventsPlayer in app.js -->
-    <div class="zone zone-left zone-left-events" id="zone-left">
+    <!-- Upcoming (left): plain white-text overlay (no card background of
+         its own - see .zone-left in style.css) over whatever's baked into
+         wall_background.jpg at this spot. Text cards from
+         media/<campus>/events.json's `events` array, driven by EventsPlayer
+         in app.js -->
+    <div class="zone zone-left" id="zone-left">
       <div class="event-card" id="event-card"></div>
     </div>
 
-    <!-- Right boxes ("Recent Moments"): synchronized rotation of named
-         event photo groups from media/<campus>/events.json (falls back to
-         a flat shuffle of media/<campus>/recent/ if that's absent), driven
-         by RecentEventsPlayer in app.js. Title sits above the top box. -->
+    <!-- Recent (right): titled event photos from events.json, then orphan
+         images in recent/; if nothing to show, white "coming soon".
+         Title sits above the box (same width), driven by RecentEventsPlayer. -->
     <div class="recent-event-title" id="recent-event-title"></div>
-    <div class="zone zone-right-top" id="zone-right-top">
-      <img class="fit-contain" id="recent-top" alt="" />
-    </div>
-    <div class="zone zone-right-middle" id="zone-right-middle">
-      <img class="fit-contain" id="recent-middle" alt="" />
-    </div>
-    <div class="zone zone-right-bottom" id="zone-right-bottom">
-      <img class="fit-contain" id="recent-bottom" alt="" />
+    <div class="zone zone-right" id="zone-right">
+      <img class="fit-contain" id="recent-photo" alt="" />
+      <div class="recent-coming-soon" id="recent-coming-soon">coming soon</div>
     </div>
 
     <!-- News ticker: full-width overlay, on top of every zone, not part of
-         the template's 5 boxes. Content from media/<campus>/newstick*.txt,
+         the template's 3 boxes. Content from media/<campus>/newstick*.txt,
          driven by NewsTicker in app.js. -->
     <div class="news-ticker" id="news-ticker">
       <div class="news-ticker-track" id="news-ticker-track"></div>

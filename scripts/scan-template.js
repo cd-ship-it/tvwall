@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Manual/debug entry point - `npm run scan-template`. The same scan also
-// runs automatically on every server start (see server/index.js), so this
-// is only needed to check the result without booting the whole server.
+// Manual entry point - `npm run scan-template`. Scanning is manual-only
+// (see server/index.js) - this is the CLI equivalent of the "Scan
+// Template" button on /control, for checking the result without booting
+// the whole server.
 const { regenerateZoneCss } = require('../server/services/zonePositions');
 
 const result = regenerateZoneCss();
