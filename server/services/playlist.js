@@ -21,6 +21,7 @@ const DEFAULT_FULLSCREEN = {
   start: '09:00',
   end: '10:00',
   days: [], // empty = never auto-scheduled; operator must pick days
+  force: null, // 'on' | 'off' | null — persisted so Force On survives restarts
 };
 
 // Flat root of the whole local media cache - holds the shared sync
@@ -245,7 +246,8 @@ function normalizeFullscreen(raw) {
   const start = normalizeClock(raw.start) || DEFAULT_FULLSCREEN.start;
   const end = normalizeClock(raw.end) || DEFAULT_FULLSCREEN.end;
   const file = typeof raw.file === 'string' && raw.file.trim() ? raw.file.trim() : null;
-  return { file, start, end, days };
+  const force = [null, 'on', 'off'].includes(raw.force) ? raw.force : null;
+  return { file, start, end, days, force };
 }
 
 // Accept "HH:MM" or "HH:MM:SS" from <input type="time">; store HH:MM.

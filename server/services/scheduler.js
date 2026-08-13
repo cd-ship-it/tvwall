@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const { syncDriveFolder } = require('./driveSync');
 const { getPlaylist, loadConfig, isWebcamScheduled, isFullscreenScheduled } = require('./playlist');
-const { state } = require('../state');
+const { state, setOverride } = require('../state');
 
 // Priority: fullscreen (force on / schedule) always beats webcam and the
 // normal dashboard. Force-off suppresses the fullscreen schedule only.
@@ -21,6 +21,15 @@ function computeMode() {
 }
 
 function startScheduler() {
+  // Restore persisted fullscreen force before the first mode compute so a
+  // Force On still applies after nodemon/pm2 restart.
+  const boot = loadConfig();
+  if (boot.fullscreen && ['on', 'off'].includes(boot.fullscreen.force)) {
+    setOverride({ fullscreenForce: boot.fullscreen.force });
+  } else if (boot.fullscreen && boot.fullscreen.force === null) {
+    setOverride({ fullscreenForce: null });
+  }
+
   // Drive sync: every minute, but only act on it every 15 min normally,
   // every 1 min on Sundays. A single cron tick keeps the two cadences from
   // fighting over the same job.

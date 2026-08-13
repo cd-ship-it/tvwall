@@ -124,7 +124,13 @@ router.post('/api/fullscreen', express.json(), (req, res) => {
   }
 
   const config = updateSettings({
-    fullscreen: { file: nextFile, start: startNorm, end: endNorm, days: [...new Set(days)] },
+    fullscreen: {
+      ...loadConfig().fullscreen,
+      file: nextFile,
+      start: startNorm,
+      end: endNorm,
+      days: [...new Set(days)],
+    },
   });
   state.mode = computeMode();
   res.json({ ok: true, fullscreen: config.fullscreen, mode: state.mode });
@@ -136,10 +142,10 @@ router.post('/api/fullscreen-force', express.json(), (req, res) => {
     return res.status(400).json({ error: "force must be 'on', 'off', or null" });
   }
 
-  if (force === 'on') {
-    const config = loadConfig();
-    let nextFile = config.fullscreen.file;
+  const config = loadConfig();
+  let nextFile = config.fullscreen.file;
 
+  if (force === 'on') {
     // Allow Force On to pin the dropdown selection without requiring a
     // full schedule save (start/end/days) first.
     if (file !== undefined && file !== null && file !== '') {
@@ -151,9 +157,6 @@ router.post('/api/fullscreen-force', express.json(), (req, res) => {
         return res.status(400).json({ error: 'file must be a name from fullscreen_img (JPG/PNG/video)' });
       }
       nextFile = file;
-      updateSettings({
-        fullscreen: { ...config.fullscreen, file: nextFile },
-      });
     }
 
     if (!nextFile) {
@@ -161,6 +164,15 @@ router.post('/api/fullscreen-force', express.json(), (req, res) => {
     }
   }
 
+  // Persist force (+ optional file) so a nodemon/pm2 restart does not clear
+  // Force On the way a pure in-memory override would.
+  updateSettings({
+    fullscreen: {
+      ...config.fullscreen,
+      file: force === 'on' ? nextFile : config.fullscreen.file,
+      force,
+    },
+  });
   setOverride({ fullscreenForce: force });
   state.mode = computeMode();
   res.json({
