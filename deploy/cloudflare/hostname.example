@@ -1,0 +1,3 @@
+# Copy to hostname.txt (gitignored) after Step 3, used by verify.sh
+# Example:
+tvwall.example.com

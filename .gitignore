@@ -12,3 +12,5 @@ credentials/
 *.log
 .DS_Store
 public/zone-positions.css
+deploy/cloudflare/hostname.txt
+

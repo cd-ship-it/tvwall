@@ -1,6 +1,9 @@
 #!/bin/bash
 # Wait until the local TV Wall server answers, then exec Chrome in kiosk mode.
 # launchd KeepAlive tracks this process: we exec Chrome so a crash relaunches us.
+#
+# Always use 127.0.0.1 — never the Cloudflare public hostname. The wall display
+# must keep working if the tunnel/Access is down; remote ops use /control via CF.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

@@ -16,7 +16,7 @@ cp .env.example .env
 Edit `.env`:
 - `DRIVE_ROOT_FOLDER_ID` - the Google Drive organization root folder (contains one subfolder per campus).
 - `CAMPUS` - which campus subfolder this machine serves, e.g. `milpitas`. Matched case-insensitively against subfolder names directly under `DRIVE_ROOT_FOLDER_ID`.
-- `CONTROL_USER` / `CONTROL_PASSWORD` - basic auth for `/control`. Change these before this is reachable over Tailscale.
+- `CONTROL_USER` / `CONTROL_PASSWORD` - basic auth for `/control`. **Change `CONTROL_PASSWORD` before exposing `/control` over Tailscale or Cloudflare** (see `.env.example`).
 
 Google Drive OAuth credentials were copied from the `heart` project (`credentials/client_secret.json`, `credentials/drive_token.json`) - already authenticated as cd@crosspointchurchsv.org with Drive scope, so no fresh consent flow is needed. Both files are gitignored.
 
@@ -25,7 +25,7 @@ Google Drive OAuth credentials were copied from the `heart` project (`credential
 LaunchAgents + wrappers live in `deploy/kiosk/`:
 
 - `start-server.sh` — starts/resurrects the Express app under pm2 if `tvwall` is not online (also used as a 2‑minute watchdog)
-- `start-chrome.sh` — waits for `http://127.0.0.1:$PORT/`, then `exec`s Chrome in `--kiosk` with a dedicated profile
+- `start-chrome.sh` — waits for `http://127.0.0.1:$PORT/`, then `exec`s Chrome in `--kiosk` with a dedicated profile (**always localhost**, even if Cloudflare exposes `/control` publicly)
 - `install.sh` / `uninstall.sh` — render plist templates into `~/Library/LaunchAgents` and load/unload them
 
 On the Mini (auto-login user), after `.env` / credentials / `npm install` / a working `pm2 start` + `pm2 save`:
@@ -35,6 +35,18 @@ On the Mini (auto-login user), after `.env` / credentials / `npm install` / a wo
 ```
 
 Logs: `~/Library/Logs/TVWall/`. See script headers for smoke-test commands.
+
+## Cloudflare Tunnel + Access (remote `/control`)
+
+Staff can open `/control` from any browser without Tailscale. Artifacts live in `deploy/cloudflare/`:
+
+1. Domain on Cloudflare — see [`deploy/cloudflare/DOMAIN_SETUP.md`](deploy/cloudflare/DOMAIN_SETUP.md)
+2. Create tunnel in Zero Trust, then on the Mini: `./deploy/cloudflare/install-tunnel.sh '<TOKEN>'`
+3. Public hostname → `http://127.0.0.1:3000`
+4. Access policy — [`deploy/cloudflare/ACCESS_POLICY.md`](deploy/cloudflare/ACCESS_POLICY.md)
+5. `./deploy/cloudflare/verify.sh tvwall.YOURDOMAIN`
+
+Full walkthrough: [`deploy/cloudflare/README.md`](deploy/cloudflare/README.md). Hostname mapping: [`PUBLIC_HOSTNAME.md`](deploy/cloudflare/PUBLIC_HOSTNAME.md). Access: [`ACCESS_POLICY.md`](deploy/cloudflare/ACCESS_POLICY.md). Keep SSH on Tailscale; keep kiosk Chrome on localhost.
 
 ## Run
 
