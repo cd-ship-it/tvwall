@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template — install.sh substitutes __TVWALL_HOME__ / __HOME__ and installs to ~/Library/LaunchAgents.
+  Waits for the local server, then execs Chrome in kiosk mode. KeepAlive relaunches on exit.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>org.tvwall.chrome</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__TVWALL_HOME__/deploy/kiosk/start-chrome.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__TVWALL_HOME__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Relaunch if Chrome exits/crashes. The wrapper re-waits for the server. -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Avoid a tight crash loop if Chrome can't start. -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/TVWall/launchd-chrome.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/TVWall/launchd-chrome.err.log</string>
+</dict>
+</plist>

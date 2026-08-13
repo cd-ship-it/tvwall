@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template — install.sh substitutes __TVWALL_HOME__ and installs to ~/Library/LaunchAgents.
+  Starts (or resurrects) the Express server under pm2 on login, and re-checks every 2 minutes.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>org.tvwall.server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__TVWALL_HOME__/deploy/kiosk/start-server.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__TVWALL_HOME__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Soft watchdog: re-run the idempotent ensure script if pm2/tvwall died. -->
+  <key>StartInterval</key>
+  <integer>120</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/TVWall/launchd-server.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/TVWall/launchd-server.err.log</string>
+</dict>
+</plist>

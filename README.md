@@ -20,6 +20,22 @@ Edit `.env`:
 
 Google Drive OAuth credentials were copied from the `heart` project (`credentials/client_secret.json`, `credentials/drive_token.json`) - already authenticated as cd@crosspointchurchsv.org with Drive scope, so no fresh consent flow is needed. Both files are gitignored.
 
+## Mac Mini kiosk (production)
+
+LaunchAgents + wrappers live in `deploy/kiosk/`:
+
+- `start-server.sh` — starts/resurrects the Express app under pm2 if `tvwall` is not online (also used as a 2‑minute watchdog)
+- `start-chrome.sh` — waits for `http://127.0.0.1:$PORT/`, then `exec`s Chrome in `--kiosk` with a dedicated profile
+- `install.sh` / `uninstall.sh` — render plist templates into `~/Library/LaunchAgents` and load/unload them
+
+On the Mini (auto-login user), after `.env` / credentials / `npm install` / a working `pm2 start` + `pm2 save`:
+
+```
+./deploy/kiosk/install.sh
+```
+
+Logs: `~/Library/Logs/TVWall/`. See script headers for smoke-test commands.
+
 ## Run
 
 ```
