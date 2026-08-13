@@ -122,6 +122,13 @@ One consistent duration (`recentRoundDuration`) for every Recent photo. Title si
 
 **News ticker - not one of the template's 3 zones.** A full-width overlay bar, ~100px tall, pinned to the bottom of the canvas and rendered on top of every zone (`z-index: 1000` - explicit, not just relying on DOM order). Blue background, white text, continuous right-to-left scroll. Content comes from a local `news*.txt` in the campus directory (e.g. `media/milpitas/newsticcker.txt` - matched broadly by prefix/extension rather than trying to pattern-match "ticker" spelling variants, since a typo can break a literal substring match anyway), whitespace-collapsed into one line. Scroll speed (`tickerSpeed`, pixels/second) is adjustable live from `/control`'s "Slide Timing" section, defaults to 30. Implemented as a `requestAnimationFrame` loop in `public/app.js` (not a CSS animation) specifically so a live speed change takes effect immediately without recalculating/restarting an animation-duration; looping is seamless regardless of text length vs. container width via the standard duplicate-text-plus-modulo-wrap marquee technique. Can be switched fully on/off from `/control`'s "News Ticker" section (`POST /control/api/ticker`, `tickerEnabled` in `wall-config.json`) - when off, the bar is hidden (`display: none`) and the animation loop itself stops (`cancelAnimationFrame`), not just visually hidden while still running.
 
+**Refresh Display / Restart Server - remote deploys from `/control`.** The "Display & Server" section covers the two things a `git pull` on the Mini needs, so a code update doesn't require SSH plus a Chrome restart:
+
+- **Refresh Display** (`POST /control/api/reload-display`) bumps `state.reload.nonce`; the kiosk page sees the new value on its next `/api/state` poll (~5s) and calls `location.reload()`. Picks up changed HTML/CSS/JS. Same nonce-vs-last-seen trick as "skip to item", so a lingering value can't cause reload loops.
+- **Restart Server** (`POST /control/api/restart-server`) responds, then exits the process 250ms later so the supervisor starts a fresh one - that's how changed *server* code takes effect. Under pm2 that's autorestart, with `deploy/kiosk`'s 2-minute LaunchAgent watchdog as a backstop. The button then polls `/control/api/status` until the new process answers. Under `npm run dev` there's no supervisor (nodemon treats a clean exit as "done"), so the response reports `supervised: false` and the UI says nothing restarted it - use this on the Mini, not in dev.
+
+The wall keeps showing its current slides through a server restart; `pollState()` swallows the failed polls and resumes when the server is back.
+
 ## Layout template & zone names
 
 Two separate images, deliberately not one dual-purpose file:

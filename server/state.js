@@ -42,6 +42,13 @@ const state = {
     nonce: 0,
   },
 
+  // Bumped by /control's "Refresh Display". The kiosk client reloads the page
+  // when it sees a new value on its next poll, so a code/CSS change can be
+  // picked up without SSHing in to restart Chrome.
+  reload: {
+    nonce: 0,
+  },
+
   webcam: {
     // Last known status reported by the kiosk client itself (server can't
     // see the USB device; the browser does the capture).
@@ -67,4 +74,8 @@ function skipToItem(index) {
   state.skip.nonce += 1;
 }
 
-module.exports = { state, setSyncStatus, setZoneScanStatus, setOverride, skipToItem };
+function requestReload() {
+  state.reload.nonce += 1;
+}
+
+module.exports = { state, setSyncStatus, setZoneScanStatus, setOverride, skipToItem, requestReload };

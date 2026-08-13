@@ -599,12 +599,23 @@ function stopWebcamMode() {
 
 // ---- Poll server state ----
 let lastSkipNonce = null;
+let lastReloadNonce = null;
 
 async function pollState() {
   try {
     const res = await fetch('/api/state', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
+
+    // "Refresh Display" from /control. Checked before anything else so we
+    // don't bother re-driving players we're about to discard.
+    if (data.reload) {
+      if (lastReloadNonce !== null && data.reload.nonce !== lastReloadNonce) {
+        location.reload();
+        return;
+      }
+      lastReloadNonce = data.reload.nonce;
+    }
 
     if (data.mode === 'fullscreen') {
       showFullscreenMedia(data.fullscreen);

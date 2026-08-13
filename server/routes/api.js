@@ -30,6 +30,7 @@ router.get('/state', (req, res) => {
     tickerEnabled: config.tickerEnabled,
     fullscreen: getFullscreenMedia(config.fullscreen),
     skip: state.skip,
+    reload: state.reload,
     sync: state.sync,
   });
 });

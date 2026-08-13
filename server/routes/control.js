@@ -9,7 +9,7 @@ const {
   normalizeClock,
   parseTimeToMinutes,
 } = require('../services/playlist');
-const { state, setOverride, skipToItem } = require('../state');
+const { state, setOverride, skipToItem, requestReload } = require('../state');
 const { syncDriveFolder } = require('../services/driveSync');
 const { regenerateZoneCss } = require('../services/zonePositions');
 const { requireAuth } = require('../middleware/auth');
@@ -205,6 +205,27 @@ router.post('/api/sync-now', async (req, res) => {
 router.post('/api/scan-template', (req, res) => {
   const result = regenerateZoneCss();
   res.json({ ok: result.ok, error: result.error, zoneScan: state.zoneScan });
+});
+
+// Tells the kiosk page to reload itself on its next poll - picks up changed
+// HTML/CSS/JS (e.g. after a git pull) without restarting Chrome over SSH.
+router.post('/api/reload-display', (req, res) => {
+  requestReload();
+  res.json({ ok: true, reload: state.reload });
+});
+
+// Exits the process so the supervisor starts a fresh one, which is how new
+// server-side code gets picked up after a git pull. Under pm2 that's autorestart
+// (with deploy/kiosk's LaunchAgent watchdog as a backstop); under nodemon a
+// clean exit just stops, so the response says which case applies.
+router.post('/api/restart-server', (req, res) => {
+  const supervised = !!process.env.pm_id;
+  res.json({ ok: true, supervised });
+  // Let the response flush before tearing the process down.
+  setTimeout(() => {
+    console.log('restart requested from /control - exiting for supervisor restart');
+    process.exit(0);
+  }, 250);
 });
 
 module.exports = router;

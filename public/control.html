@@ -152,6 +152,17 @@
   </section>
 
   <section>
+    <h2>Display &amp; Server</h2>
+    <div class="row">
+      <button id="reload-display">Refresh Display</button>
+      <button id="restart-server" class="secondary">Restart Server</button>
+      <span class="save-note" id="maintenance-note" style="display:none;"></span>
+    </div>
+    <div class="status-line">Refresh Display reloads the wall page on its next poll (~5s) - use after a <code>git pull</code> that changed HTML/CSS/JS.</div>
+    <div class="status-line">Restart Server restarts the Node process so changed server code takes effect. The wall keeps showing its current slides and reconnects on its own.</div>
+  </section>
+
+  <section>
     <h2>Featured Playlist (auto-synced from Drive)</h2>
     <ul class="playlist" id="playlist-list"></ul>
   </section>
@@ -370,6 +381,60 @@ document.getElementById('scan-now').onclick = async (e) => {
   e.target.textContent = 'Scan Template Now';
   if (!result.ok) alert(`Scan failed: ${result.error}`);
   refresh();
+};
+
+function showMaintenanceNote(text, isError) {
+  const note = document.getElementById('maintenance-note');
+  note.textContent = text;
+  note.className = isError ? 'save-note err' : 'save-note';
+  note.style.display = 'inline';
+  setTimeout(() => { note.style.display = 'none'; }, 6000);
+}
+
+document.getElementById('reload-display').onclick = async (e) => {
+  e.target.disabled = true;
+  const result = await api('/reload-display', { method: 'POST' });
+  e.target.disabled = false;
+  showMaintenanceNote(result.ok ? 'Display will reload within ~5s' : 'Failed', !result.ok);
+};
+
+document.getElementById('restart-server').onclick = async (e) => {
+  if (!confirm('Restart the TV Wall server process? The display keeps playing and reconnects on its own.')) return;
+  e.target.disabled = true;
+  e.target.textContent = 'Restarting...';
+
+  let supervised = true;
+  try {
+    const result = await api('/restart-server', { method: 'POST' });
+    supervised = result.supervised !== false;
+  } catch (err) {
+    // The process may die before the response lands; treat that as success
+    // and let the wait loop below decide.
+  }
+
+  // Poll until the fresh process answers again.
+  const deadline = Date.now() + 30000;
+  let back = false;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      const res = await fetch('/control/api/status', { cache: 'no-store' });
+      if (res.ok) { back = true; break; }
+    } catch (err) {
+      // Still down - keep waiting.
+    }
+  }
+
+  e.target.disabled = false;
+  e.target.textContent = 'Restart Server';
+  if (back) {
+    showMaintenanceNote('Server restarted');
+    refresh();
+  } else if (supervised) {
+    showMaintenanceNote('Server did not come back within 30s - check pm2', true);
+  } else {
+    showMaintenanceNote('Server stopped and nothing restarted it (not running under pm2)', true);
+  }
 };
 
 document.getElementById('save-timing').onclick = async () => {
