@@ -13,4 +13,6 @@ credentials/
 .DS_Store
 public/zone-positions.css
 deploy/cloudflare/hostname.txt
+# Per-machine timings, webcam windows, fullscreen schedule — edited via /control
+wall-config.json
 
