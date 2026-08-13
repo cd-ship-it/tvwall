@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>TV Wall</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=fullscreen2" />
 <!-- Auto-generated from wall_template_default.jpg on every server start
      (server/services/zonePositions.js) - loaded after style.css so its
      :root values win. -->
@@ -56,11 +56,11 @@
     <!-- Fullscreen override: covers the entire canvas (zones + ticker)
          during a scheduled window or Force On from /control. Media from
          media/<campus>/fullscreen_img/. -->
-    <div class="fullscreen-overlay" id="fullscreen-overlay">
+    <div class="fullscreen-overlay" id="fullscreen-overlay" aria-hidden="true">
       <video id="fullscreen-video" class="fit-contain" playsinline muted loop></video>
       <img id="fullscreen-image" class="fit-contain" alt="" />
     </div>
   </div>
-  <script src="app.js"></script>
+  <script src="app.js?v=fullscreen2"></script>
 </body>
 </html>

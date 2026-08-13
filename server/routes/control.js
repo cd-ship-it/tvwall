@@ -131,19 +131,44 @@ router.post('/api/fullscreen', express.json(), (req, res) => {
 });
 
 router.post('/api/fullscreen-force', express.json(), (req, res) => {
-  const { force } = req.body; // 'on' | 'off' | null
+  const { force, file } = req.body; // force: 'on' | 'off' | null; optional file when forcing on
   if (![null, 'on', 'off'].includes(force)) {
     return res.status(400).json({ error: "force must be 'on', 'off', or null" });
   }
+
   if (force === 'on') {
     const config = loadConfig();
-    if (!config.fullscreen.file) {
+    let nextFile = config.fullscreen.file;
+
+    // Allow Force On to pin the dropdown selection without requiring a
+    // full schedule save (start/end/days) first.
+    if (file !== undefined && file !== null && file !== '') {
+      if (typeof file !== 'string') {
+        return res.status(400).json({ error: 'file must be a string' });
+      }
+      const availableNames = new Set(getFullscreenFiles().map((f) => f.file));
+      if (!availableNames.has(file)) {
+        return res.status(400).json({ error: 'file must be a name from fullscreen_img (JPG/PNG/video)' });
+      }
+      nextFile = file;
+      updateSettings({
+        fullscreen: { ...config.fullscreen, file: nextFile },
+      });
+    }
+
+    if (!nextFile) {
       return res.status(400).json({ error: 'Select a fullscreen image/video before Force On' });
     }
   }
+
   setOverride({ fullscreenForce: force });
   state.mode = computeMode();
-  res.json({ ok: true, overrides: state.overrides, mode: state.mode });
+  res.json({
+    ok: true,
+    overrides: state.overrides,
+    mode: state.mode,
+    fullscreen: loadConfig().fullscreen,
+  });
 });
 
 router.post('/api/skip', express.json(), (req, res) => {

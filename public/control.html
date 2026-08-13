@@ -53,6 +53,7 @@
 <body>
   <h1>TV Wall Control</h1>
   <div class="status-line">Mode: <b id="mode-value">-</b></div>
+  <div class="status-line">Fullscreen media: <b id="fullscreen-media-label">-</b></div>
 
   <section>
     <h2>Fullscreen Override</h2>
@@ -254,6 +255,10 @@ function syncFullscreenForm(data) {
 async function refresh() {
   const data = await api('/status');
   document.getElementById('mode-value').textContent = data.mode;
+  document.getElementById('fullscreen-media-label').textContent =
+    data.fullscreen && data.fullscreen.file
+      ? `${data.fullscreen.file}${data.mode === 'fullscreen' ? ' (showing now)' : ''}`
+      : '(none selected)';
 
   document.getElementById('fullscreen-on').classList.toggle('active', data.overrides.fullscreenForce === 'on');
   document.getElementById('fullscreen-off').classList.toggle('active', data.overrides.fullscreenForce === 'off');
@@ -313,12 +318,16 @@ async function saveFullscreenForm() {
 }
 
 document.getElementById('fullscreen-on').onclick = async () => {
-  const save = await saveFullscreenForm();
-  if (save.error) {
-    alert(save.error);
-    return refresh();
+  const file = document.getElementById('fullscreen-file').value || null;
+  if (!file) {
+    alert('Select a fullscreen image/video from the list first (sync Drive if the list is empty).');
+    return;
   }
-  const result = await api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: 'on' }) });
+  // Force On does not depend on schedule start/end/days — only the file.
+  const result = await api('/fullscreen-force', {
+    method: 'POST',
+    body: JSON.stringify({ force: 'on', file }),
+  });
   if (result.error) alert(result.error);
   return refresh();
 };

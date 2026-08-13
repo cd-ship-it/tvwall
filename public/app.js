@@ -475,6 +475,7 @@ let fullscreenSrc = null;
 
 function showFullscreenMedia(item) {
   fullscreenOverlay.classList.add('visible');
+  fullscreenOverlay.setAttribute('aria-hidden', 'false');
   fullscreenActive = true;
 
   if (!item || !item.file) {
@@ -496,7 +497,7 @@ function showFullscreenMedia(item) {
     fullscreenImageEl.classList.remove('visible');
     fullscreenImageEl.removeAttribute('src');
     fullscreenVideoEl.classList.add('visible');
-    if (fullscreenVideoEl.src !== new URL(src, window.location.origin).href) {
+    if (fullscreenVideoEl.getAttribute('src') !== src) {
       fullscreenVideoEl.src = src;
     }
     const playPromise = fullscreenVideoEl.play();
@@ -506,13 +507,16 @@ function showFullscreenMedia(item) {
     fullscreenVideoEl.pause();
     fullscreenVideoEl.removeAttribute('src');
     fullscreenImageEl.classList.add('visible');
-    fullscreenImageEl.src = src;
+    if (fullscreenImageEl.getAttribute('src') !== src) {
+      fullscreenImageEl.src = src;
+    }
   }
 }
 
 function hideFullscreenMedia() {
   if (!fullscreenActive && !fullscreenOverlay.classList.contains('visible')) return;
   fullscreenOverlay.classList.remove('visible');
+  fullscreenOverlay.setAttribute('aria-hidden', 'true');
   fullscreenActive = false;
   fullscreenSrc = null;
   fullscreenVideoEl.classList.remove('visible');
