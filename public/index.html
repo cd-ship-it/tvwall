@@ -52,6 +52,14 @@
     <div class="news-ticker" id="news-ticker">
       <div class="news-ticker-track" id="news-ticker-track"></div>
     </div>
+
+    <!-- Fullscreen override: covers the entire canvas (zones + ticker)
+         during a scheduled window or Force On from /control. Media from
+         media/<campus>/fullscreen_img/. -->
+    <div class="fullscreen-overlay" id="fullscreen-overlay">
+      <video id="fullscreen-video" class="fit-contain" playsinline muted loop></video>
+      <img id="fullscreen-image" class="fit-contain" alt="" />
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

@@ -9,8 +9,19 @@ const CONFIG_PATH = path.join(__dirname, '..', '..', 'wall-config.json');
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi']);
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+// Fullscreen override accepts JPG/PNG + video only (no gif/webp).
+const FULLSCREEN_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
 const IGNORED_FILES = new Set(['.gitkeep', '.ds_store', '.sync-manifest.json', 'wall-config.json']);
 const DEFAULT_SLIDE_DURATION = Number(process.env.DEFAULT_SLIDE_DURATION) || 8;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const HH_MM_RE = /^\d{2}:\d{2}$/;
+
+const DEFAULT_FULLSCREEN = {
+  file: null, // filename inside fullscreen_img/, or null
+  start: '09:00',
+  end: '10:00',
+  days: [], // empty = never auto-scheduled; operator must pick days
+};
 
 // Flat root of the whole local media cache - holds the shared sync
 // manifest, and one subdirectory per campus underneath it.
@@ -36,6 +47,13 @@ function getFeaturedDir() {
 // media/<campus>/recent/ - Recent zone (right box) photo pool.
 function getRecentDir() {
   return path.join(getCampusDir(), 'recent');
+}
+
+// media/<campus>/fullscreen_img/ - full-canvas override media (Drive
+// folder of the same name under the campus). Covers the whole wall when
+// scheduled or force-shown from /control.
+function getFullscreenDir() {
+  return path.join(getCampusDir(), 'fullscreen_img');
 }
 
 // Scans a zone directory into { file, type, duration? } entries, same
@@ -192,7 +210,59 @@ const DEFAULT_SETTINGS = {
   eventsDuration: 5, // Upcoming zone, per event card
   tickerSpeed: 30, // news ticker, pixels per second
   tickerEnabled: true, // news ticker on/off, from /control
+  fullscreen: { ...DEFAULT_FULLSCREEN },
 };
+
+// JPG/PNG + video entries from fullscreen_img/. Used by /control's picker
+// and by the kiosk when mode is fullscreen.
+function getFullscreenFiles() {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(getFullscreenDir(), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  return entries
+    .filter((e) => e.isFile())
+    .map((e) => e.name)
+    .filter((name) => !name.startsWith('.') && !IGNORED_FILES.has(name.toLowerCase()))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => {
+      const ext = path.extname(name).toLowerCase();
+      if (VIDEO_EXTENSIONS.has(ext)) return { file: name, type: 'video' };
+      if (FULLSCREEN_IMAGE_EXTENSIONS.has(ext)) return { file: name, type: 'image' };
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function normalizeFullscreen(raw) {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_FULLSCREEN };
+  const days = Array.isArray(raw.days)
+    ? raw.days.filter((d) => DAY_NAMES.includes(d))
+    : [];
+  const start = normalizeClock(raw.start) || DEFAULT_FULLSCREEN.start;
+  const end = normalizeClock(raw.end) || DEFAULT_FULLSCREEN.end;
+  const file = typeof raw.file === 'string' && raw.file.trim() ? raw.file.trim() : null;
+  return { file, start, end, days };
+}
+
+// Accept "HH:MM" or "HH:MM:SS" from <input type="time">; store HH:MM.
+function normalizeClock(value) {
+  if (typeof value !== 'string') return null;
+  const m = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+function parseTimeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
 
 // Webcam schedule windows and per-zone slide durations can't be inferred
 // from a folder of files, so they're still hand-curated - via a small,
@@ -203,7 +273,7 @@ const DEFAULT_SETTINGS = {
 // not config-based - each zone reads its own Drive/local data directly.
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    return { webcamSchedule: [], ...DEFAULT_SETTINGS };
+    return { webcamSchedule: [], ...DEFAULT_SETTINGS, fullscreen: { ...DEFAULT_FULLSCREEN } };
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -215,11 +285,12 @@ function loadConfig() {
       eventsDuration: Number(parsed.eventsDuration) > 0 ? Number(parsed.eventsDuration) : DEFAULT_SETTINGS.eventsDuration,
       tickerSpeed: Number(parsed.tickerSpeed) > 0 ? Number(parsed.tickerSpeed) : DEFAULT_SETTINGS.tickerSpeed,
       tickerEnabled: typeof parsed.tickerEnabled === 'boolean' ? parsed.tickerEnabled : DEFAULT_SETTINGS.tickerEnabled,
+      fullscreen: normalizeFullscreen(parsed.fullscreen),
     };
   } catch {
     // Malformed config shouldn't take down the Featured playlist - fall
     // back to defaults until it's fixed.
-    return { webcamSchedule: [], ...DEFAULT_SETTINGS };
+    return { webcamSchedule: [], ...DEFAULT_SETTINGS, fullscreen: { ...DEFAULT_FULLSCREEN } };
   }
 }
 
@@ -252,8 +323,6 @@ function getPlaylist() {
   };
 }
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 // window: { start: "HH:MM", end: "HH:MM", days?: ["Sun", ...] }
 // Same-day windows only (end assumed later than start on the same day).
 function isWithinWindow(window, now = new Date()) {
@@ -275,11 +344,36 @@ function isWebcamScheduled(webcamSchedule, now = new Date()) {
   return webcamSchedule.some((w) => isWithinWindow(w, now));
 }
 
+// Fullscreen auto-schedule: needs a selected file, at least one day, and
+// a same-day window (end strictly after start). Uses the wall machine's
+// local clock, same as webcam windows.
+function isFullscreenScheduled(fullscreen, now = new Date()) {
+  if (!fullscreen || !fullscreen.file) return false;
+  if (!Array.isArray(fullscreen.days) || fullscreen.days.length === 0) return false;
+  if (!HH_MM_RE.test(fullscreen.start) || !HH_MM_RE.test(fullscreen.end)) return false;
+  if (parseTimeToMinutes(fullscreen.end) <= parseTimeToMinutes(fullscreen.start)) return false;
+  return isWithinWindow(
+    { start: fullscreen.start, end: fullscreen.end, days: fullscreen.days },
+    now
+  );
+}
+
+// Resolve the currently configured fullscreen media item (or null if the
+// chosen file is missing / unrecognized after a Drive prune).
+function getFullscreenMedia(fullscreen) {
+  if (!fullscreen || !fullscreen.file) return null;
+  const match = getFullscreenFiles().find((f) => f.file === fullscreen.file);
+  return match || null;
+}
+
 module.exports = {
   getMediaDir,
   getCampusDir,
   getFeaturedDir,
   getRecentDir,
+  getFullscreenDir,
+  getFullscreenFiles,
+  getFullscreenMedia,
   getPlaylist,
   getRecentEvents,
   getRecentSlides,
@@ -288,5 +382,10 @@ module.exports = {
   loadConfig,
   updateSettings,
   isWebcamScheduled,
+  isFullscreenScheduled,
   isWithinWindow,
+  DAY_NAMES,
+  HH_MM_RE,
+  normalizeClock,
+  parseTimeToMinutes,
 };

@@ -4,6 +4,7 @@ const {
   getRecentSlides,
   getUpcomingEvents,
   getNewsTickerText,
+  getFullscreenMedia,
   loadConfig,
 } = require('../services/playlist');
 const { state } = require('../state');
@@ -27,6 +28,7 @@ router.get('/state', (req, res) => {
     tickerText: getNewsTickerText(),
     tickerSpeed: config.tickerSpeed,
     tickerEnabled: config.tickerEnabled,
+    fullscreen: getFullscreenMedia(config.fullscreen),
     skip: state.skip,
     sync: state.sync,
   });

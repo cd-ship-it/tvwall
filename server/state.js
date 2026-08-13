@@ -24,12 +24,14 @@ const state = {
   },
 
   // Operator overrides from /control. Null means "no override, follow
-  // playlist.json schedule normally."
+  // the configured schedule normally."
   overrides: {
     webcamForce: null, // 'on' | 'off' | null
+    fullscreenForce: null, // 'on' | 'off' | null — fullscreen always wins when on
   },
 
-  // Current mode as last computed by the scheduler: 'webcam' | 'playlist'.
+  // Current mode as last computed by the scheduler:
+  // 'fullscreen' | 'webcam' | 'playlist'.
   mode: 'playlist',
 
   // Bumped on every "skip to item" command from /control. The kiosk client

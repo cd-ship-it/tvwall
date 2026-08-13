@@ -41,11 +41,55 @@
   ul.playlist button { padding: 4px 10px; font-size: 12px; }
   .ok { color: #6f6; }
   .err { color: #f66; }
+  .days { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #ccc; }
+  .days label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .field select, .field input[type="time"] {
+    background: #222; border: 1px solid #333; color: #eee;
+    padding: 6px 8px; border-radius: 6px; font-size: 14px; width: auto; min-width: 160px;
+  }
+  .hint { font-size: 12px; color: #777; margin-top: 8px; }
 </style>
 </head>
 <body>
   <h1>TV Wall Control</h1>
   <div class="status-line">Mode: <b id="mode-value">-</b></div>
+
+  <section>
+    <h2>Fullscreen Override</h2>
+    <div class="row" style="margin-bottom: 12px;">
+      <button id="fullscreen-on">Force On</button>
+      <button id="fullscreen-off">Force Off</button>
+      <button id="fullscreen-auto" class="secondary">Follow Schedule</button>
+    </div>
+    <div class="row">
+      <label class="field">
+        Image / video (from Drive fullscreen_img)
+        <select id="fullscreen-file"></select>
+      </label>
+      <label class="field">
+        Start
+        <input type="time" id="fullscreen-start" step="60" />
+      </label>
+      <label class="field">
+        End
+        <input type="time" id="fullscreen-end" step="60" />
+      </label>
+    </div>
+    <div class="days" id="fullscreen-days" style="margin-top: 12px;">
+      <label><input type="checkbox" value="Mon" /> Mon</label>
+      <label><input type="checkbox" value="Tue" /> Tue</label>
+      <label><input type="checkbox" value="Wed" /> Wed</label>
+      <label><input type="checkbox" value="Thu" /> Thu</label>
+      <label><input type="checkbox" value="Fri" /> Fri</label>
+      <label><input type="checkbox" value="Sat" /> Sat</label>
+      <label><input type="checkbox" value="Sun" /> Sun</label>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <button id="save-fullscreen">Save Schedule</button>
+      <span class="save-note" id="fullscreen-saved" style="display:none;">Saved</span>
+    </div>
+    <div class="hint">Covers the entire wall (zones + ticker). JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black. Fullscreen always wins over webcam. Sync Drive after uploading files to <code>milpitas/fullscreen_img</code>.</div>
+  </section>
 
   <section>
     <h2>Webcam Override</h2>
@@ -156,9 +200,64 @@ function renderWindows(el, windows) {
   }
 }
 
+function renderFullscreenFileOptions(files, selected) {
+  const sel = document.getElementById('fullscreen-file');
+  const focused = document.activeElement === sel;
+  if (focused) return;
+
+  const current = selected || '';
+  sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = files && files.length ? '(none selected)' : '(no files synced yet — sync Drive)';
+  sel.appendChild(none);
+
+  (files || []).forEach((f) => {
+    const opt = document.createElement('option');
+    opt.value = f.file;
+    opt.textContent = `${f.file} (${f.type})`;
+    if (f.file === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (current && ![...sel.options].some((o) => o.value === current)) {
+    const missing = document.createElement('option');
+    missing.value = current;
+    missing.textContent = `${current} (missing from disk)`;
+    missing.selected = true;
+    sel.appendChild(missing);
+  }
+}
+
+function syncFullscreenForm(data) {
+  const fs = data.fullscreen || {};
+  const startEl = document.getElementById('fullscreen-start');
+  const endEl = document.getElementById('fullscreen-end');
+  const daysEl = document.getElementById('fullscreen-days');
+  const editing =
+    document.activeElement === startEl ||
+    document.activeElement === endEl ||
+    daysEl.contains(document.activeElement) ||
+    document.activeElement === document.getElementById('fullscreen-file');
+
+  renderFullscreenFileOptions(data.fullscreenFiles, fs.file);
+
+  if (editing) return;
+
+  startEl.value = fs.start || '09:00';
+  endEl.value = fs.end || '10:00';
+  const selectedDays = new Set(fs.days || []);
+  daysEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.checked = selectedDays.has(cb.value);
+  });
+}
+
 async function refresh() {
   const data = await api('/status');
   document.getElementById('mode-value').textContent = data.mode;
+
+  document.getElementById('fullscreen-on').classList.toggle('active', data.overrides.fullscreenForce === 'on');
+  document.getElementById('fullscreen-off').classList.toggle('active', data.overrides.fullscreenForce === 'off');
+  document.getElementById('fullscreen-auto').classList.toggle('active', data.overrides.fullscreenForce == null);
 
   document.getElementById('webcam-on').classList.toggle('active', data.overrides.webcamForce === 'on');
   document.getElementById('webcam-off').classList.toggle('active', data.overrides.webcamForce === 'off');
@@ -189,6 +288,7 @@ async function refresh() {
 
   renderItems(document.getElementById('playlist-list'), data.playlist);
   renderWindows(document.getElementById('webcam-windows'), data.webcamSchedule);
+  syncFullscreenForm(data);
 
   // Don't clobber the field while the operator is mid-edit.
   const mainInput = document.getElementById('main-slide-duration');
@@ -200,6 +300,44 @@ async function refresh() {
   if (document.activeElement !== eventsInput) eventsInput.value = data.settings.eventsDuration;
   if (document.activeElement !== tickerInput) tickerInput.value = data.settings.tickerSpeed;
 }
+
+async function saveFullscreenForm() {
+  const file = document.getElementById('fullscreen-file').value || null;
+  const start = document.getElementById('fullscreen-start').value;
+  const end = document.getElementById('fullscreen-end').value;
+  const days = [...document.querySelectorAll('#fullscreen-days input:checked')].map((cb) => cb.value);
+  return api('/fullscreen', {
+    method: 'POST',
+    body: JSON.stringify({ file, start, end, days }),
+  });
+}
+
+document.getElementById('fullscreen-on').onclick = async () => {
+  const save = await saveFullscreenForm();
+  if (save.error) {
+    alert(save.error);
+    return refresh();
+  }
+  const result = await api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: 'on' }) });
+  if (result.error) alert(result.error);
+  return refresh();
+};
+document.getElementById('fullscreen-off').onclick = () =>
+  api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: 'off' }) }).then(refresh);
+document.getElementById('fullscreen-auto').onclick = () =>
+  api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: null }) }).then(refresh);
+
+document.getElementById('save-fullscreen').onclick = async () => {
+  const result = await saveFullscreenForm();
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  const note = document.getElementById('fullscreen-saved');
+  note.style.display = 'inline';
+  setTimeout(() => { note.style.display = 'none'; }, 2000);
+  refresh();
+};
 
 document.getElementById('webcam-on').onclick = () => api('/webcam', { method: 'POST', body: JSON.stringify({ force: 'on' }) }).then(refresh);
 document.getElementById('webcam-off').onclick = () => api('/webcam', { method: 'POST', body: JSON.stringify({ force: 'off' }) }).then(refresh);

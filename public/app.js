@@ -466,6 +466,62 @@ const newsTicker = new NewsTicker(
 );
 newsTicker.start();
 
+// ---- Fullscreen override (covers entire wall including ticker) ----
+const fullscreenOverlay = document.getElementById('fullscreen-overlay');
+const fullscreenVideoEl = document.getElementById('fullscreen-video');
+const fullscreenImageEl = document.getElementById('fullscreen-image');
+let fullscreenActive = false;
+let fullscreenSrc = null;
+
+function showFullscreenMedia(item) {
+  fullscreenOverlay.classList.add('visible');
+  fullscreenActive = true;
+
+  if (!item || !item.file) {
+    fullscreenVideoEl.classList.remove('visible');
+    fullscreenVideoEl.pause();
+    fullscreenVideoEl.removeAttribute('src');
+    fullscreenImageEl.classList.remove('visible');
+    fullscreenImageEl.removeAttribute('src');
+    fullscreenSrc = null;
+    return;
+  }
+
+  const src = `/media/fullscreen_img/${encodeURIComponent(item.file)}`;
+  if (src === fullscreenSrc && item.type === 'video' && !fullscreenVideoEl.paused) return;
+  if (src === fullscreenSrc && item.type === 'image' && fullscreenImageEl.classList.contains('visible')) return;
+  fullscreenSrc = src;
+
+  if (item.type === 'video') {
+    fullscreenImageEl.classList.remove('visible');
+    fullscreenImageEl.removeAttribute('src');
+    fullscreenVideoEl.classList.add('visible');
+    if (fullscreenVideoEl.src !== new URL(src, window.location.origin).href) {
+      fullscreenVideoEl.src = src;
+    }
+    const playPromise = fullscreenVideoEl.play();
+    if (playPromise && playPromise.catch) playPromise.catch(() => {});
+  } else {
+    fullscreenVideoEl.classList.remove('visible');
+    fullscreenVideoEl.pause();
+    fullscreenVideoEl.removeAttribute('src');
+    fullscreenImageEl.classList.add('visible');
+    fullscreenImageEl.src = src;
+  }
+}
+
+function hideFullscreenMedia() {
+  if (!fullscreenActive && !fullscreenOverlay.classList.contains('visible')) return;
+  fullscreenOverlay.classList.remove('visible');
+  fullscreenActive = false;
+  fullscreenSrc = null;
+  fullscreenVideoEl.classList.remove('visible');
+  fullscreenVideoEl.pause();
+  fullscreenVideoEl.removeAttribute('src');
+  fullscreenImageEl.classList.remove('visible');
+  fullscreenImageEl.removeAttribute('src');
+}
+
 // ---- Middle-box mode switching (webcam / playlist / feed-unavailable) ----
 const modeLayers = {
   webcam: document.getElementById('mode-webcam'),
@@ -546,18 +602,30 @@ async function pollState() {
     if (!res.ok) return;
     const data = await res.json();
 
-    middlePlayer.setItems(data.playlist);
-    recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
-    eventsPlayer.setEvents(data.events, data.eventsDuration);
-    newsTicker.setText(data.tickerText);
-    newsTicker.setSpeed(data.tickerSpeed);
-    newsTicker.setEnabled(data.tickerEnabled !== false);
-
-    if (data.mode === 'webcam') {
-      startWebcamMode();
-    } else {
+    if (data.mode === 'fullscreen') {
+      showFullscreenMedia(data.fullscreen);
       stopWebcamMode();
-      showMainLayer('playlist');
+      // Keep dashboard players fed so leaving fullscreen resumes cleanly,
+      // but hide ticker while the overlay covers everything.
+      middlePlayer.setItems(data.playlist);
+      recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
+      eventsPlayer.setEvents(data.events, data.eventsDuration);
+      newsTicker.setEnabled(false);
+    } else {
+      hideFullscreenMedia();
+      middlePlayer.setItems(data.playlist);
+      recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
+      eventsPlayer.setEvents(data.events, data.eventsDuration);
+      newsTicker.setText(data.tickerText);
+      newsTicker.setSpeed(data.tickerSpeed);
+      newsTicker.setEnabled(data.tickerEnabled !== false);
+
+      if (data.mode === 'webcam') {
+        startWebcamMode();
+      } else {
+        stopWebcamMode();
+        showMainLayer('playlist');
+      }
     }
 
     if (lastSkipNonce !== null && data.skip.nonce !== lastSkipNonce && data.skip.index !== null) {

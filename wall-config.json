@@ -12,5 +12,11 @@
   "recentRoundDuration": 8,
   "eventsDuration": 10,
   "tickerSpeed": 140,
-  "tickerEnabled": true
+  "tickerEnabled": true,
+  "fullscreen": {
+    "file": null,
+    "start": "09:00",
+    "end": "10:00",
+    "days": []
+  }
 }

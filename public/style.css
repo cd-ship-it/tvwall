@@ -330,3 +330,32 @@ body {
   font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
   will-change: transform;
 }
+
+/* Full-canvas override above zones + ticker. Black fill; media uses
+   object-fit:contain so non-2880×1080 assets letterbox instead of crop. */
+.fullscreen-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 2000;
+  display: none;
+}
+
+.fullscreen-overlay.visible {
+  display: block;
+}
+
+.fullscreen-overlay .fit-contain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+}
+
+.fullscreen-overlay .fit-contain.visible {
+  display: block;
+}

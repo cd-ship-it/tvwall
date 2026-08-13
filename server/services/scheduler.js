@@ -1,11 +1,19 @@
 const cron = require('node-cron');
 const { syncDriveFolder } = require('./driveSync');
-const { getPlaylist, isWebcamScheduled } = require('./playlist');
+const { getPlaylist, loadConfig, isWebcamScheduled, isFullscreenScheduled } = require('./playlist');
 const { state } = require('../state');
 
+// Priority: fullscreen (force on / schedule) always beats webcam and the
+// normal dashboard. Force-off suppresses the fullscreen schedule only.
 function computeMode() {
+  const config = loadConfig();
   const { webcamSchedule } = getPlaylist();
-  const { webcamForce } = state.overrides;
+  const { webcamForce, fullscreenForce } = state.overrides;
+
+  if (fullscreenForce === 'on') return 'fullscreen';
+  if (fullscreenForce !== 'off' && isFullscreenScheduled(config.fullscreen)) {
+    return 'fullscreen';
+  }
 
   if (webcamForce === 'on') return 'webcam';
   if (webcamForce === 'off') return 'playlist';
@@ -24,8 +32,8 @@ function startScheduler() {
     }
   });
 
-  // Webcam schedule window evaluation, per PRD section 6: node-cron
-  // evaluates the schedule. Checked frequently so cutovers feel prompt.
+  // Mode evaluation (fullscreen / webcam / playlist). Checked frequently
+  // so schedule cutovers feel prompt.
   cron.schedule('*/10 * * * * *', () => {
     state.mode = computeMode();
   });
