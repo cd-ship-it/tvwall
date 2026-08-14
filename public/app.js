@@ -177,25 +177,6 @@ class RecentEventsPlayer {
     const hasTitle = !!text;
     this.titleEl.textContent = text || '';
     this.titleEl.classList.toggle('visible', hasTitle);
-    if (hasTitle) this._fitTitle();
-  }
-
-  // Shrink font until the full title fits inside the title box without
-  // chopping characters. Cap height is --recent-title-max-height in CSS
-  // (public/style.css). With height:auto the box grows first; only shrink
-  // when content would exceed that max-height (or overflow width).
-  _fitTitle() {
-    const el = this.titleEl;
-    const maxPx = 28;
-    const minPx = 12;
-    let size = maxPx;
-    el.style.fontSize = `${size}px`;
-    // clientHeight is clamped by max-height; scrollHeight is the unclamped
-    // content height - shrink until they match (plus width check).
-    while (size > minPx && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
-      size -= 1;
-      el.style.fontSize = `${size}px`;
-    }
   }
 
   _render(roundIndex) {
@@ -221,6 +202,17 @@ class RecentEventsPlayer {
     clearTimeout(this.timeoutHandle);
     this.timeoutHandle = setTimeout(() => this._tick(), nextBoundary - now);
   }
+
+  // DEBUG ONLY - see the click listener below. Steps to the next photo
+  // immediately, for eyeballing titles/crops without waiting out the
+  // rotation timer. Remove this method + the listener once done checking.
+  next() {
+    if (!this.items.length) return;
+    this.lastRoundIndex = this.lastRoundIndex === null ? 0 : this.lastRoundIndex + 1;
+    this._render(this.lastRoundIndex);
+    clearTimeout(this.timeoutHandle);
+    this.timeoutHandle = setTimeout(() => this._tick(), this.roundMs);
+  }
 }
 
 const recentEventsPlayer = new RecentEventsPlayer(
@@ -235,10 +227,10 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function formatShortDate(iso) {
-  const d = new Date(`${iso}T00:00:00`);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+// Chinese weekly-prayer bullets come prefixed "1. ", "2. ", etc. from the
+// source page. Strip that so the slide is just the sentence.
+function stripLeadingBulletNumber(text) {
+  return (text || '').replace(/^\d+[\.．、)\]]\s*/, '');
 }
 
 // Events have a deliberately loose schema (single `date`, or `date_range` +
@@ -247,30 +239,68 @@ function formatShortDate(iso) {
 // doesn't control. This just renders whatever fields happen to be present.
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function formatSchedule(event) {
-  let dateLine = '';
-  if (event.date) {
-    // Plain `date` is either a real ISO date ("2026-09-11" -> "Sep 11") or
-    // free text describing a recurrence ("Every 2nd and 4th Sunday") - only
-    // the former should get reformatted.
-    dateLine = ISO_DATE_RE.test(event.date) ? formatShortDate(event.date) : event.date;
-  } else if (event.date_range) {
-    const start = formatShortDate(event.date_range.start);
-    const end = formatShortDate(event.date_range.end);
-    dateLine = event.recurrence ? `${start} - ${end}, ${event.recurrence}` : `${start} - ${end}`;
-  } else if (Array.isArray(event.dates) && event.dates.length > 0) {
-    const start = formatShortDate(event.dates[0]);
-    const end = formatShortDate(event.dates[event.dates.length - 1]);
-    dateLine = event.recurrence
-      ? `${start} - ${end}, ${event.recurrence}`
-      : `${start} - ${end} (${event.dates.length} sessions)`;
-  } else if (event.recurrence) {
-    // No date/date_range/dates at all, just a standalone recurrence
-    // description (e.g. "Every 2nd and 4th Sunday") - show it on its own
-    // rather than silently dropping it.
-    dateLine = event.recurrence;
+// First specific calendar day, or null when the event is recurrence-only
+// ("every Tuesday") / free-text. Date ranges and `dates` arrays use the
+// start / first entry.
+function eventStartIso(event) {
+  if (event.date && ISO_DATE_RE.test(event.date)) return event.date;
+  if (event.date_range && ISO_DATE_RE.test(event.date_range.start)) return event.date_range.start;
+  if (Array.isArray(event.dates)) {
+    const first = event.dates.find((d) => ISO_DATE_RE.test(d));
+    if (first) return first;
   }
-  return [dateLine, event.time].filter(Boolean).join(' · ');
+  return null;
+}
+
+function formatMonthDay(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return null;
+  return {
+    month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    day: String(d.getDate()),
+  };
+}
+
+function formatShortDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Right column: date line only when it adds info the left box doesn't
+// already show (range, "every Sunday", recurrence). Exact single dates
+// stay in the square only. Then time, then location+address.
+function eventDetailLines(event) {
+  const dateBits = [];
+  if (event.date && !ISO_DATE_RE.test(event.date)) dateBits.push(event.date);
+  if (event.date_range && event.date_range.start && event.date_range.end) {
+    dateBits.push(`${formatShortDate(event.date_range.start)} – ${formatShortDate(event.date_range.end)}`);
+  } else if (Array.isArray(event.dates) && event.dates.length > 1) {
+    dateBits.push(
+      `${formatShortDate(event.dates[0])} – ${formatShortDate(event.dates[event.dates.length - 1])} (${event.dates.length} sessions)`
+    );
+  }
+  if (event.recurrence) dateBits.push(event.recurrence);
+
+  const place = [event.location, event.address].filter(Boolean).join(' — ');
+  return [dateBits.filter(Boolean).join(' · '), event.time, place].filter(Boolean);
+}
+
+function renderEventMeta(event) {
+  const iso = eventStartIso(event);
+  const parts = formatMonthDay(iso);
+  const left = parts
+    ? `<div class="event-date-box"><div class="event-date-month">${escapeHtml(parts.month)}</div><div class="event-date-day">${escapeHtml(parts.day)}</div></div>`
+    : `<div class="event-date-box event-date-box-icon"><img src="/icons/calendar.svg" alt="" /></div>`;
+
+  const lines = eventDetailLines(event);
+  const details = lines.length
+    ? `<div class="event-meta-details">${lines
+        .map((text, i) => `<div class="${i === 0 ? 'event-meta-time' : 'event-meta-location'}">${escapeHtml(text)}</div>`)
+        .join('')}</div>`
+    : '';
+
+  return `<div class="event-meta">${left}${details}</div>`;
 }
 
 function renderEventCard(event) {
@@ -280,13 +310,7 @@ function renderEventCard(event) {
     parts.push(`<div class="event-title-zh">${escapeHtml(event.title_zh)}</div>`);
   }
 
-  const schedule = formatSchedule(event);
-  if (schedule) parts.push(`<div class="event-schedule">${escapeHtml(schedule)}</div>`);
-
-  if (event.location) {
-    const loc = event.address ? `${event.location} — ${event.address}` : event.location;
-    parts.push(`<div class="event-location">${escapeHtml(loc)}</div>`);
-  }
+  parts.push(renderEventMeta(event));
 
   const extras = [];
   if (event.doors_open) extras.push(`Doors open ${event.doors_open}`);
@@ -362,6 +386,117 @@ class EventsPlayer {
 
 const eventsPlayer = new EventsPlayer(document.getElementById('event-card'));
 
+// Drives the Prayers zone (right, below Recent): one bullet item at a time
+// from crosspointchurchsv.org/weekly-prayer (server/services/prayerSync.js
+// scrapes + caches it, getPrayerSlides() in playlist.js reads that cache) -
+// all Chinese items first (source order), then all English (source
+// order), then loops. Wall-clock-aligned + comingSoon empty state, same
+// shape as RecentEventsPlayer above.
+class PrayersPlayer {
+  constructor(cardEl, textEl, comingSoonEl) {
+    this.cardEl = cardEl;
+    this.textEl = textEl;
+    this.comingSoonEl = comingSoonEl;
+    this.items = []; // [{ lang: 'zh'|'en', text }] - zh items then en items
+    this.roundMs = 10000;
+    this.timeoutHandle = null;
+    this.lastRoundIndex = null;
+    this.comingSoon = false;
+  }
+
+  setData(slides, durationSeconds, comingSoon) {
+    slides = slides || [];
+    if (durationSeconds) this.roundMs = durationSeconds * 1000;
+    this.comingSoon = !!comingSoon || slides.length === 0;
+    this.items = this.comingSoon ? [] : slides;
+
+    if (this.comingSoon) {
+      clearTimeout(this.timeoutHandle);
+      this.timeoutHandle = null;
+      this.lastRoundIndex = null;
+      this.cardEl.classList.remove('visible');
+      this.comingSoonEl.classList.add('visible');
+      return;
+    }
+
+    this.comingSoonEl.classList.remove('visible');
+    this.cardEl.classList.add('visible');
+
+    if (!this.timeoutHandle) {
+      this._tick();
+    }
+  }
+
+  _render(roundIndex) {
+    this.lastRoundIndex = roundIndex;
+    const item = this.items[roundIndex % this.items.length];
+    this.textEl.textContent = item.lang === 'zh' ? stripLeadingBulletNumber(item.text) : item.text;
+    this.textEl.classList.toggle('lang-zh', item.lang === 'zh');
+    this.textEl.classList.toggle('lang-en', item.lang !== 'zh');
+    this._fitText(item.lang);
+  }
+
+  // Prayer sentences run long (much longer than an event title), so this
+  // shrinks the font until the full sentence fits the card's available
+  // space without chopping characters - same idea as
+  // RecentEventsPlayer._fitTitle, but measured against the card's actual
+  // box (via getBoundingClientRect/getComputedStyle) rather than a CSS
+  // max-height, since this element sizes itself to its flex container
+  // instead of having a fixed cap of its own. Chinese starts at 30px;
+  // English stays at 26px.
+  _fitText(lang) {
+    const el = this.textEl;
+    const card = this.cardEl;
+    const maxPx = lang === 'zh' ? 30 : 26;
+    const minPx = 13;
+
+    const cardStyle = getComputedStyle(card);
+    const paddingY = parseFloat(cardStyle.paddingTop) + parseFloat(cardStyle.paddingBottom);
+    const paddingX = parseFloat(cardStyle.paddingLeft) + parseFloat(cardStyle.paddingRight);
+    const cardRect = card.getBoundingClientRect();
+    const availableHeight = cardRect.height - paddingY;
+    const availableWidth = cardRect.width - paddingX;
+
+    let size = maxPx;
+    el.style.fontSize = `${size}px`;
+    while (size > minPx && (el.scrollHeight > availableHeight || el.scrollWidth > availableWidth)) {
+      size -= 1;
+      el.style.fontSize = `${size}px`;
+    }
+  }
+
+  _tick() {
+    if (!this.items.length) return;
+    const now = Date.now();
+    const roundIndex = Math.floor(now / this.roundMs);
+    if (roundIndex !== this.lastRoundIndex) {
+      this._render(roundIndex);
+    }
+
+    const nextBoundary = (roundIndex + 1) * this.roundMs;
+    clearTimeout(this.timeoutHandle);
+    this.timeoutHandle = setTimeout(() => this._tick(), nextBoundary - now);
+  }
+
+  // DEBUG ONLY - see the click listener below. Steps to the next prayer
+  // immediately, for eyeballing typography across Chinese/English lengths
+  // without waiting out the rotation timer. Remove this method + the
+  // listener once done checking.
+  next() {
+    if (!this.items.length) return;
+    this.lastRoundIndex = this.lastRoundIndex === null ? 0 : this.lastRoundIndex + 1;
+    this._render(this.lastRoundIndex);
+    clearTimeout(this.timeoutHandle);
+    this.timeoutHandle = setTimeout(() => this._tick(), this.roundMs);
+  }
+}
+
+const prayersPlayer = new PrayersPlayer(
+  document.getElementById('prayer-card'),
+  document.getElementById('prayer-text'),
+  document.getElementById('prayers-coming-soon')
+);
+
 // DEBUG ONLY - click the Upcoming box to manually advance to the next
 // event, for checking typography across different title/notes lengths.
 // Remove this block (and EventsPlayer.next() above) when done debugging.
@@ -383,6 +518,24 @@ const eventsPlayer = new EventsPlayer(document.getElementById('event-card'));
   zoneMiddle.style.cursor = 'pointer';
   zoneMiddle.title = 'DEBUG: click to advance to next featured item';
   zoneMiddle.addEventListener('click', () => middlePlayer.advance());
+})();
+
+// DEBUG ONLY - click Recent / Prayers to step to the next slide, for
+// checking photo titles and prayer typography without waiting out the
+// rotation timer. Remove these blocks (and RecentEventsPlayer.next() /
+// PrayersPlayer.next() above) when done debugging.
+(() => {
+  const zoneRight = document.getElementById('zone-right');
+  zoneRight.style.cursor = 'pointer';
+  zoneRight.title = 'DEBUG: click to show next recent photo';
+  zoneRight.addEventListener('click', () => recentEventsPlayer.next());
+})();
+
+(() => {
+  const zonePrayers = document.getElementById('zone-prayers');
+  zonePrayers.style.cursor = 'pointer';
+  zonePrayers.title = 'DEBUG: click to show next prayer';
+  zonePrayers.addEventListener('click', () => prayersPlayer.next());
 })();
 
 // Continuous right-to-left marquee, speed in pixels/second (adjustable
@@ -625,12 +778,14 @@ async function pollState() {
       middlePlayer.setItems(data.playlist);
       recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
       eventsPlayer.setEvents(data.events, data.eventsDuration);
+      prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
       newsTicker.setEnabled(false);
     } else {
       hideFullscreenMedia();
       middlePlayer.setItems(data.playlist);
       recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
       eventsPlayer.setEvents(data.events, data.eventsDuration);
+      prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
       newsTicker.setText(data.tickerText);
       newsTicker.setSpeed(data.tickerSpeed);
       newsTicker.setEnabled(data.tickerEnabled !== false);

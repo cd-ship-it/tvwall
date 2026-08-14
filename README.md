@@ -46,7 +46,9 @@ Staff can open `/control` from any browser without Tailscale. Artifacts live in 
 4. Access policy — [`deploy/cloudflare/ACCESS_POLICY.md`](deploy/cloudflare/ACCESS_POLICY.md)
 5. `./deploy/cloudflare/verify.sh tvwall.YOURDOMAIN`
 
-Full walkthrough: [`deploy/cloudflare/README.md`](deploy/cloudflare/README.md). Hostname mapping: [`PUBLIC_HOSTNAME.md`](deploy/cloudflare/PUBLIC_HOSTNAME.md). Access: [`ACCESS_POLICY.md`](deploy/cloudflare/ACCESS_POLICY.md). Keep SSH on Tailscale; keep kiosk Chrome on localhost.
+Full walkthrough: [`deploy/cloudflare/README.md`](deploy/cloudflare/README.md). Hostname mapping: [`PUBLIC_HOSTNAME.md`](deploy/cloudflare/PUBLIC_HOSTNAME.md). Access: [`ACCESS_POLICY.md`](deploy/cloudflare/ACCESS_POLICY.md).
+
+SSH to the Mini also goes through the same tunnel (client-side `cloudflared`, single admin) - see [`SSH.md`](deploy/cloudflare/SSH.md). Kiosk Chrome always stays on localhost.
 
 ## Run
 
@@ -98,9 +100,13 @@ Sync resolves the campus subfolder by name first, then mirrors each zone subfold
 
 One consistent duration (`recentRoundDuration`) for every Recent photo. Title sits above the green box, same width as the image; height is capped by `--recent-title-max-height` in `public/style.css` (default **200px**, hand-editable); font shrinks so the full title always fits without chopping characters. The photo itself has rounded corners via `--recent-radius` in `public/style.css` (default `16px`, independent from Featured's radius). Videos in `recent/` are ignored (photo-only slot).
 
+**Prayers (right, below Recent) - scraped from the church website, one bullet at a time.** Not Drive content - `server/services/prayerSync.js` fetches `https://crosspointchurchsv.org/weekly-prayer` directly (plain `fetch`, no HTML-parsing dependency; the page's markup is a predictable `.prose` block: a date `<h3>`, a `<h2>`+`<ul>` Chinese section, an `<hr>`, then a `<h2>`+`<ul>` English section) and caches the result to `media/<campus>/prayers-cache.json`. `getPrayerSlides()` in `server/services/playlist.js` reads that cache on every `/api/state` poll, same "external process writes it, we just read it" pattern as `events.json`/the news ticker file. Playback order: every Chinese bullet in source order, then every English bullet in source order, then loops - one bullet per slide, `prayersDuration` seconds each (Slide Timing on `/control`, default 10s). Each slide shows the update's date (e.g. "Aug 9") plus the bullet text verbatim, including the Chinese items' own "1.", "2." leading numbers from the source - no separate "代禱事項"/"Prayer Requests" section heading is rendered. The box is a self-contained dark rounded card (its own fill + `--prayers-radius`, independent of whatever `wall_background.jpg` has baked in at that spot) since, unlike Upcoming, this box didn't exist when that background art was drawn. Font size auto-shrinks per slide (`PrayersPlayer._fitText` in `public/app.js`) so long prayer sentences always fit without chopping characters. If nothing has ever been fetched successfully, the box shows white "coming soon", same as Recent's empty state.
+
+Refresh cadence rides the same schedule as Drive sync in `server/services/scheduler.js` (~every 15 min, every 1 min on Sundays) plus once at server boot - chosen for consistency with Drive sync, not because the source page changes that often. A **"Check Now"** button on `/control`'s "Weekly Prayer Sync" section (`POST /control/api/prayers-sync-now`) fetches immediately, e.g. right after the church posts a new weekly update; that section also shows the last fetch time/result/item counts. A fetch failure (network error, or the page's structure changing enough that `prayerSync.js` can't parse it) is logged and leaves the previous `prayers-cache.json` in place untouched - same "keep last known good" philosophy as the template scan below - so a transient error never blanks the box.
+
 **Upcoming (left) - plain text overlay, no card.** `.zone-left` has no background fill of its own (transparent) - the "card" look, and any logo/branding, comes entirely from whatever's baked into `wall_background.jpg` at that spot (see "Layout template & zone names" below). Code only renders white/light text on top: reads `events.json`'s `events` array (same file as Recent), one event at a time, source order, every `eventsDuration` seconds. Schema is deliberately loose (plain `date`, or `date_range` + `recurrence`, or `dates` array, plus optional location/address/notes/cost/speakers/etc.) — `formatSchedule()` / `renderEventCard()` in `public/app.js` render whatever fields are present; `public/style.css`'s `.event-card`/`.event-title-*`/`.event-schedule`/`.event-location`/`.event-notes` control the (currently minimal, not-yet-final) typography. Missing file / empty list leaves the box blank. The old `mp_upcoming_events.json` source is obsolete.
 
-**Slide timing - adjustable from `/control`.** Featured (`mainSlideDuration`), Recent (`recentRoundDuration`), and Upcoming (`eventsDuration`) are three separate values, editable live from "Slide Timing" (`POST /control/api/settings`). Takes effect on the next state poll (~5s). Stored in `wall-config.json`.
+**Slide timing - adjustable from `/control`.** Featured (`mainSlideDuration`), Recent (`recentRoundDuration`), Upcoming (`eventsDuration`), and Prayers (`prayersDuration`) are four separate values, editable live from "Slide Timing" (`POST /control/api/settings`). Takes effect on the next state poll (~5s). Stored in `wall-config.json`.
 
 **Webcam schedule - curated via `wall-config.json`.** Can't be inferred from a folder of files, so it's still hand-edited (no `/control` UI for this one). Lives at the repo root — not in `media/`, not in Drive:
 
@@ -135,10 +141,12 @@ Two separate images, deliberately not one dual-purpose file:
 
 | File | Purpose | Ever displayed? |
 |---|---|---|
-| `wall_template_default.jpg` (repo root) | **Scan-only.** A 2880x1080 image with **three** placeholder boxes in solid green (a fuzzy range around `#00ff2a`-`#24ff00`) marking where each zone sits. | No - purely a coordinate source. |
+| `wall box positions.jpg` (repo root) | **Scan-only.** A 2880x1080 image with **four** placeholder boxes in solid green (a fuzzy range around `#00ff2a`-`#24ff00`) marking where each zone sits. | No - purely a coordinate source. |
 | `wall_background.jpg` (repo root) | **Display-only.** The actual polished art shown behind every zone - dark theme, any logo/tagline/static labels baked in, no green needed. | Yes - served at `/assets/wall-background.jpg`. |
 
 They're split like this so rounded zone corners (see below) reveal tasteful background art at the corners instead of leftover scan-green. `wall_background.jpg` doesn't ship in the repo by default - until you drop one in, `server/index.js`'s route for it responds with no content and `.wall`'s CSS `background: #000` fallback just shows plain black.
+
+`wall_template_default.jpg` (plus the older `wall template.psd` / `wall template background.psd`) is superseded by `wall box positions.jpg` / `.psd` above - kept in the repo for now as unused reference, not read by any code.
 
 Canonical product names (use these everywhere):
 
@@ -146,34 +154,37 @@ Canonical product names (use these everywhere):
 |---|---|---|
 | Left | **Upcoming** | Plain white-text overlay (upcoming events) |
 | Center | **Featured** | Featured photos + videos, rounded corners |
-| Right | **Recent** | Recent event photos, rounded corners, title above the box |
+| Right, top | **Recent** | Recent event photos, rounded corners, title above the box |
+| Right, bottom | **Prayers** | Weekly prayer bullets scraped from the church website, rounded corners |
 
-**Positions come from a manually-triggered scan**, not hardcoded - `server/services/templateScan.js` decodes the current `wall_template_default.jpg` (pure-JS JPEG decode via `jpeg-js`, no native deps or Python needed), flood-fills the green channel to find the three blobs, and classifies them by shape/position (biggest = Featured/middle, left-half = Upcoming, right-half = Recent). `server/services/zonePositions.js` writes the result to `public/zone-positions.css` (gitignored - it's a build artifact), which `index.html` loads after `style.css` so its values win. None of this changed by the two-file split above - only what's *displayed* changed, not what's *scanned*.
+**Positions come from a manually-triggered scan**, not hardcoded - `server/services/templateScan.js` decodes the current `wall box positions.jpg` (pure-JS JPEG decode via `jpeg-js`, no native deps or Python needed), flood-fills the green channel to find the four blobs, and classifies them by shape/position (biggest = Featured/middle, left-half = Upcoming, right-half = Recent + Prayers, the two right-half boxes told apart by which sits higher). `server/services/zonePositions.js` writes the result to `public/zone-positions.css` (gitignored - it's a build artifact), which `index.html` loads after `style.css` so its values win. None of this changed by the two-file split above - only what's *displayed* changed, not what's *scanned*.
 
-**The scan does NOT run automatically on server start** (dev, prod, or pm2) - `wall_template_default.jpg` only changes a handful of times a year, so re-scanning on every boot/nodemon-restart just risked clobbering hand-tuned CSS for no benefit. Trigger it manually instead, whichever's more convenient:
+**The scan does NOT run automatically on server start** (dev, prod, or pm2) - `wall box positions.jpg` only changes a handful of times a year, so re-scanning on every boot/nodemon-restart just risked clobbering hand-tuned CSS for no benefit. Trigger it manually instead, whichever's more convenient:
 - **"Scan Template Now"** button on `/control` (Wall Template Scan section) - shows last scan time/result/zone sizes right there, no SSH needed.
 - `npm run scan-template` from the CLI - same scan, standalone, without booting the server.
 
-This means: **replacing `wall_template_default.jpg` with a new design that keeps the green boxes in roughly the same places just works** - drop in the new file, then click "Scan Template Now" (or run the CLI command). No `/control` settings change, no JSON, no code change. Updating `wall_background.jpg` (the visible art) is even simpler - just replace the file, no scan involved at all.
+This means: **replacing `wall box positions.jpg` with a new design that keeps the green boxes in roughly the same places just works** - drop in the new file, then click "Scan Template Now" (or run the CLI command). No `/control` settings change, no JSON, no code change. Updating `wall_background.jpg` (the visible art) is even simpler - just replace the file, no scan involved at all.
 
 If a template swap is a **real structural change** (different number of boxes, or a box that no longer falls cleanly on the left/right half), the scan fails on purpose rather than guessing wrong - it logs a clear error (surfaced on `/control` too), keeps the previous `zone-positions.css` (last known good) in place, and the wall keeps running on the old layout. That's the signal that `templateScan.js`'s classification logic needs an actual code update, not just a new image.
 
-Until the first-ever scan (e.g. a brand new checkout, since `zone-positions.css` is gitignored), the hardcoded fallback values at the top of `public/style.css` apply - they match the current `wall_template_default.jpg`, so nothing looks broken, but run one manual scan after setup to be sure.
+Until the first-ever scan (e.g. a brand new checkout, since `zone-positions.css` is gitignored), the hardcoded fallback values at the top of `public/style.css` apply - they match the current `wall box positions.jpg`, so nothing looks broken, but run one manual scan after setup to be sure.
 
-**Rounded corners.** Featured and Recent each clip to rounded corners (`.zone`'s existing `overflow: hidden` does the clipping) via independent CSS variables in `public/style.css`: `--featured-radius` (default `24px`) and `--recent-radius` (default `16px`). Upcoming has no box fill of its own, so no radius applies there - see "Upcoming" above.
+**Rounded corners.** Featured, Recent, and Prayers each clip to rounded corners (`.zone`'s existing `overflow: hidden` does the clipping) via independent CSS variables in `public/style.css`: `--featured-radius` (default `24px`), `--recent-radius` (default `16px`), and `--prayers-radius` (default `16px`). Upcoming has no box fill of its own, so no radius applies there - see "Upcoming" above.
 
 Last measured positions (for reference - always trust `public/zone-positions.css` / the server log over this table, since this one doesn't auto-update):
 
 | Zone | x, y | w × h |
 |---|---|---|
-| **Upcoming (left)** | 97, 558 | 501 × 458 |
-| **Featured (center)** | 841, 95 | 1198 × 895 |
-| **Recent (right)** | 2175, 366 | 600 × 447 |
+| **Upcoming (left)** | 115, 513 | 551 × 407 |
+| **Featured (center)** | 844, 101 | 1188 × 884 |
+| **Recent (right, top)** | 2179, 189 | 588 × 275 |
+| **Prayers (right, bottom)** | 2179, 671 | 588 × 275 |
 
 Content-model mapping:
 - **Featured** - auto-synced from Drive `featured/` (photos + videos)
 - **Recent** - `events.json` `recent_events` (titled), then orphan photos in `recent/`, else "coming soon"
 - **Upcoming** - `events.json` `events` text cards
+- **Prayers** - scraped from `crosspointchurchsv.org/weekly-prayer` (see "How content is split up" above), else "coming soon"
 
 ## Known gaps / next steps
 

@@ -9,7 +9,7 @@ const controlRoutes = require('./routes/control');
 const uploadRoutes = require('./routes/upload');
 
 // The green-box template scan (public/zone-positions.css) is intentionally
-// NOT run automatically on boot - wall_template_default.jpg only changes a
+// NOT run automatically on boot - "wall box positions.jpg" only changes a
 // few times a year, so re-scanning on every `npm start`/nodemon
 // restart/pm2 restart just risked clobbering hand-tuned CSS for no reason.
 // Trigger it manually instead: the "Scan Template" button on /control (see
@@ -33,7 +33,7 @@ app.use('/media', express.static(getCampusDir()));
 // Visible background art lives at the repo root (single source of truth) -
 // served directly from there so replacing it never requires a manual copy
 // into public/ that can go stale. Deliberately a *separate* file from
-// wall_template_default.jpg (which stays green-box-only and is never
+// "wall box positions.jpg" (which stays green-box-only and is never
 // displayed) - see zonePositions.js. If this file hasn't been dropped in
 // yet, respond with no content rather than an Express error page; .wall's
 // CSS background-color fallback covers the gap until it exists.

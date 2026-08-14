@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { syncDriveFolder } = require('./driveSync');
+const { fetchPrayers } = require('./prayerSync');
 const { getPlaylist, loadConfig, isWebcamScheduled, isFullscreenScheduled } = require('./playlist');
 const { state, setOverride } = require('../state');
 
@@ -32,12 +33,15 @@ function startScheduler() {
 
   // Drive sync: every minute, but only act on it every 15 min normally,
   // every 1 min on Sundays. A single cron tick keeps the two cadences from
-  // fighting over the same job.
+  // fighting over the same job. Weekly Prayer scraping rides the same
+  // cadence (chosen for consistency with Drive sync, not because the
+  // source page changes anywhere near that often).
   cron.schedule('* * * * *', () => {
     const now = new Date();
     const isSunday = now.getDay() === 0;
     if (isSunday || now.getMinutes() % 15 === 0) {
       syncDriveFolder();
+      fetchPrayers();
     }
   });
 
@@ -53,6 +57,7 @@ function startScheduler() {
   // Kick an initial sync at boot so the media cache isn't empty after a
   // crash/reboot recovery.
   syncDriveFolder();
+  fetchPrayers();
 }
 
 module.exports = { startScheduler, computeMode };

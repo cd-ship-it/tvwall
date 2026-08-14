@@ -15,12 +15,22 @@ const state = {
   // Green-box template scan status, surfaced on /control. Scanning is
   // manual-only (triggered from the control panel or `npm run
   // scan-template`) - see server/index.js - since it only needs to run
-  // when wall_template_default.jpg itself changes, a few times a year.
+  // when "wall box positions.jpg" itself changes, a few times a year.
   zoneScan: {
     lastScanAt: null,
     lastScanOk: null,
     lastScanError: null,
-    zones: null, // { middle: {w,h}, left: {w,h}, right: {w,h} }
+    zones: null, // { middle: {w,h}, left: {w,h}, right: {w,h}, prayers: {w,h} }
+  },
+
+  // Weekly Prayer scrape status (crosspointchurchsv.org/weekly-prayer),
+  // surfaced on /control. Refreshed on the same cadence as Drive sync
+  // (see scheduler.js) plus a manual "Check Now" button.
+  prayers: {
+    lastFetchAt: null,
+    lastFetchOk: null,
+    lastFetchError: null,
+    counts: null, // { zh, en }
   },
 
   // Operator overrides from /control. Null means "no override, follow
@@ -65,6 +75,10 @@ function setZoneScanStatus(patch) {
   Object.assign(state.zoneScan, patch);
 }
 
+function setPrayersStatus(patch) {
+  Object.assign(state.prayers, patch);
+}
+
 function setOverride(patch) {
   Object.assign(state.overrides, patch);
 }
@@ -78,4 +92,4 @@ function requestReload() {
   state.reload.nonce += 1;
 }
 
-module.exports = { state, setSyncStatus, setZoneScanStatus, setOverride, skipToItem, requestReload };
+module.exports = { state, setSyncStatus, setZoneScanStatus, setPrayersStatus, setOverride, skipToItem, requestReload };

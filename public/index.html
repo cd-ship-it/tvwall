@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <title>TV Wall</title>
-<link rel="stylesheet" href="style.css?v=fullscreen2" />
-<!-- Auto-generated from wall_template_default.jpg on every server start
+<link rel="stylesheet" href="style.css?v=recent-blur2" />
+<!-- Auto-generated from "wall box positions.jpg" by a manual scan
      (server/services/zonePositions.js) - loaded after style.css so its
      :root values win. -->
 <link rel="stylesheet" href="zone-positions.css" />
@@ -39,11 +39,23 @@
 
     <!-- Recent (right): titled event photos from events.json, then orphan
          images in recent/; if nothing to show, white "coming soon".
-         Title sits above the box (same width), driven by RecentEventsPlayer. -->
+         Title sits below the box (same width), driven by RecentEventsPlayer. -->
     <div class="recent-event-title" id="recent-event-title"></div>
     <div class="zone zone-right" id="zone-right">
-      <img class="fit-contain" id="recent-photo" alt="" />
+      <img class="fit-cover" id="recent-photo" alt="" />
       <div class="recent-coming-soon" id="recent-coming-soon">coming soon</div>
+    </div>
+
+    <!-- Prayers (right, below Recent): weekly bullet items scraped from
+         crosspointchurchsv.org/weekly-prayer (media/<campus>/prayers-cache.json
+         is the on-disk cache) - one item at a time, all Chinese items then
+         all English, driven by PrayersPlayer. Plain white-text overlay
+         like Upcoming (no card fill of its own). -->
+    <div class="zone zone-prayers" id="zone-prayers">
+      <div class="prayer-card" id="prayer-card">
+        <div class="prayer-text" id="prayer-text"></div>
+      </div>
+      <div class="prayers-coming-soon" id="prayers-coming-soon">coming soon</div>
     </div>
 
     <!-- News ticker: full-width overlay, on top of every zone, not part of
@@ -61,6 +73,6 @@
       <img id="fullscreen-image" class="fit-contain" alt="" />
     </div>
   </div>
-  <script src="app.js?v=fullscreen2"></script>
+  <script src="app.js?v=recent-blur2"></script>
 </body>
 </html>

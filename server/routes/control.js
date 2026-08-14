@@ -11,6 +11,7 @@ const {
 } = require('../services/playlist');
 const { state, setOverride, skipToItem, requestReload } = require('../state');
 const { syncDriveFolder } = require('../services/driveSync');
+const { fetchPrayers } = require('../services/prayerSync');
 const { regenerateZoneCss } = require('../services/zonePositions');
 const { requireAuth } = require('../middleware/auth');
 const { computeMode } = require('../services/scheduler');
@@ -34,6 +35,7 @@ router.get('/api/status', (req, res) => {
     skip: state.skip,
     sync: state.sync,
     zoneScan: state.zoneScan,
+    prayers: state.prayers,
     webcam: state.webcam,
     playlist: playlist.playlist,
     webcamSchedule: playlist.webcamSchedule,
@@ -43,6 +45,7 @@ router.get('/api/status', (req, res) => {
       mainSlideDuration: config.mainSlideDuration,
       recentRoundDuration: config.recentRoundDuration,
       eventsDuration: config.eventsDuration,
+      prayersDuration: config.prayersDuration,
       tickerSpeed: config.tickerSpeed,
       tickerEnabled: config.tickerEnabled,
     },
@@ -50,10 +53,16 @@ router.get('/api/status', (req, res) => {
 });
 
 router.post('/api/settings', express.json(), (req, res) => {
-  const { mainSlideDuration, recentRoundDuration, eventsDuration, tickerSpeed } = req.body;
+  const { mainSlideDuration, recentRoundDuration, eventsDuration, prayersDuration, tickerSpeed } = req.body;
   const patch = {};
 
-  for (const [key, value] of Object.entries({ mainSlideDuration, recentRoundDuration, eventsDuration, tickerSpeed })) {
+  for (const [key, value] of Object.entries({
+    mainSlideDuration,
+    recentRoundDuration,
+    eventsDuration,
+    prayersDuration,
+    tickerSpeed,
+  })) {
     if (value === undefined) continue;
     const num = Number(value);
     if (!Number.isFinite(num) || num <= 0) {
@@ -69,6 +78,7 @@ router.post('/api/settings', express.json(), (req, res) => {
       mainSlideDuration: config.mainSlideDuration,
       recentRoundDuration: config.recentRoundDuration,
       eventsDuration: config.eventsDuration,
+      prayersDuration: config.prayersDuration,
       tickerSpeed: config.tickerSpeed,
       tickerEnabled: config.tickerEnabled,
     },
@@ -196,6 +206,15 @@ router.post('/api/skip', express.json(), (req, res) => {
 router.post('/api/sync-now', async (req, res) => {
   await syncDriveFolder();
   res.json({ ok: true, sync: state.sync });
+});
+
+// Manual re-fetch of crosspointchurchsv.org/weekly-prayer for the Prayers
+// zone - same "Check Now" pattern as Drive sync above, for pulling a
+// freshly-posted update immediately instead of waiting for the next
+// scheduled tick.
+router.post('/api/prayers-sync-now', async (req, res) => {
+  const result = await fetchPrayers();
+  res.json({ ok: result.ok, error: result.error, prayers: state.prayers });
 });
 
 // Manual-only trigger for the green-box template scan (see server/index.js

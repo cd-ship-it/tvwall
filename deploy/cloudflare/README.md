@@ -72,15 +72,17 @@ echo 'tvwall.YOURDOMAIN' > deploy/cloudflare/hostname.txt
 
 ## Step 4 — Cloudflare Access
 
-1. Zero Trust → **Access → Applications → Add application → Self-hosted**
-2. Name: `TV Wall Control`
-3. Session duration: e.g. 24 hours
-4. Application domain: `tvwall.YOURDOMAIN` (same hostname as Step 3)
-5. Policy **Allow staff**:
-   - Action: **Allow**
-   - Include: **Emails** — your address + trusted staff
-6. Identity: enable **One-time PIN** (email). Optionally add Google.
-7. Save.
+Do OTP first, or login rejects any address that isn't a Cloudflare account member
+("Cloudflare sign-in is restricted to members of the account").
+
+1. **Integrations → Identity providers → Add new identity provider → One-time PIN**
+2. **Access controls → Policies → Add a policy**: `Allow staff`, Action **Allow**,
+   Include **Emails** = your address + trusted staff
+3. **Access controls → Applications → Add an application → Public DNS**
+   (this is the old "Self-hosted" type)
+4. Name `TV Wall Control`, session duration 24 hours,
+   domain `tvwall.YOURDOMAIN` (same hostname as Step 3)
+5. Attach the `Allow staff` policy, then Save
 
 Visit `https://tvwall.YOURDOMAIN/control` in a private window:
 Cloudflare login → then app basic auth.
@@ -128,4 +130,5 @@ Also delete the tunnel + Access app in the Cloudflare dashboard if you are done 
 
 ## SSH / git pull
 
-Cloudflare here is for **HTTP `/control` only**. Keep Tailscale (or on-site) for SSH.
+SSH also runs over this tunnel — single admin, so client-side `cloudflared` is
+acceptable and Tailscale isn't needed. See [SSH.md](./SSH.md).

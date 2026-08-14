@@ -5,6 +5,7 @@ const {
   getUpcomingEvents,
   getNewsTickerText,
   getFullscreenMedia,
+  getPrayerSlides,
   loadConfig,
 } = require('../services/playlist');
 const { state } = require('../state');
@@ -17,6 +18,7 @@ router.get('/state', (req, res) => {
   const playlist = getPlaylist();
   const config = loadConfig();
   const recent = getRecentSlides();
+  const prayers = getPrayerSlides();
   res.json({
     mode: state.mode,
     playlist: playlist.playlist,
@@ -25,6 +27,10 @@ router.get('/state', (req, res) => {
     recentRoundDuration: recent.duration,
     events: getUpcomingEvents(),
     eventsDuration: config.eventsDuration,
+    prayersSlides: prayers.slides,
+    prayersComingSoon: prayers.comingSoon,
+    prayersDate: prayers.date,
+    prayersDuration: prayers.duration,
     tickerText: getNewsTickerText(),
     tickerSpeed: config.tickerSpeed,
     tickerEnabled: config.tickerEnabled,

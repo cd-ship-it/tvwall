@@ -1,6 +1,21 @@
 # Cloudflare Access policy (TV Wall)
 
-Use this when creating the Zero Trust **Self-hosted** application in Step 4.
+Use this when creating the Access application in Step 4, at [one.dash.cloudflare.com](https://one.dash.cloudflare.com).
+
+Dashboard labels have changed over time. Current names:
+
+| What you want | Where it lives now |
+|---|---|
+| Create the app | **Access controls → Applications → Add an application** |
+| App type for a public hostname | **Public DNS** (formerly "Self-hosted") |
+| Login methods / OTP | **Integrations → Identity providers** |
+| Policies (reusable objects) | **Access controls → Policies** |
+
+## Enable One-time PIN first
+
+New Zero Trust organizations default to the **Cloudflare** identity provider, which only admits members of your Cloudflare account - logging in with any other address fails with "Cloudflare sign-in is restricted to members of the account." OTP is no longer added automatically, so add it before testing:
+
+**Integrations → Identity providers → Add new identity provider → One-time PIN**
 
 ## Application
 
@@ -15,16 +30,15 @@ Protecting only `/control*` is optional. For a small trusted set, whole-hostname
 
 ## Policy: Allow staff
 
+Created under **Access controls → Policies**, then attached to the application.
+
 - **Action:** Allow
 - **Include:** Emails
   - Your email
   - Each trusted operator email
 - **Exclude:** (none)
 
-## Identity providers
-
-1. Enable **One-time PIN** (email) — works for anyone with an inbox, no Google Workspace required.
-2. Optionally enable **Google** if staff already use Google accounts.
+Do **not** write the include rule as Login Methods → One-time PIN on its own: that lets anyone with any email address request a code. Always scope the include to a specific email list.
 
 ## Operator login flow
 
@@ -34,7 +48,7 @@ Protecting only `/control*` is optional. For a small trusted set, whole-hostname
 
 ## Add a person
 
-Zero Trust → Access → Applications → TV Wall Control → Policies → edit **Allow staff** → add email → Save.
+**Access controls → Policies → Allow staff → Configure** → add their email → Save. Since policies are reusable, the change applies everywhere the policy is attached.
 
 ## Revoke a person
 

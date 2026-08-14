@@ -57,6 +57,15 @@ function getFullscreenDir() {
   return path.join(getCampusDir(), 'fullscreen_img');
 }
 
+// media/<campus>/prayers-cache.json - local cache of the last successful
+// scrape of crosspointchurchsv.org/weekly-prayer (see prayerSync.js). Not
+// Drive content, but cached per-campus anyway for architectural
+// consistency (each Mac Mini is a self-contained process) even though the
+// source page is the same for every campus.
+function getPrayersCachePath() {
+  return path.join(getCampusDir(), 'prayers-cache.json');
+}
+
 // Scans a zone directory into { file, type, duration? } entries, same
 // recognized-extension rules everywhere. `imageDuration` (seconds) is
 // applied to every image found - videos ignore it and always play their
@@ -205,10 +214,45 @@ function getNewsTickerText() {
   }
 }
 
+// Prayers zone (right, below Recent) - reads the cache prayerSync.js
+// writes, same "external process writes it, we just read it on every
+// call" pattern as events.json/newsticker. Slide order: every Chinese
+// item (source order), then every English item (source order); the
+// combined list is what loops. Missing/never-fetched cache -> comingSoon,
+// same empty-state treatment as Recent.
+function loadPrayersCache() {
+  const filePath = getPrayersCachePath();
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function getPrayerSlides() {
+  const config = loadConfig();
+  const cache = loadPrayersCache();
+  const zhItems = cache && cache.zh && Array.isArray(cache.zh.items) ? cache.zh.items : [];
+  const enItems = cache && cache.en && Array.isArray(cache.en.items) ? cache.en.items : [];
+  const slides = [
+    ...zhItems.map((text) => ({ lang: 'zh', text })),
+    ...enItems.map((text) => ({ lang: 'en', text })),
+  ];
+
+  return {
+    slides,
+    comingSoon: slides.length === 0,
+    date: cache ? cache.date : null,
+    duration: config.prayersDuration,
+  };
+}
+
 const DEFAULT_SETTINGS = {
   mainSlideDuration: DEFAULT_SLIDE_DURATION, // Featured zone, per image
   recentRoundDuration: DEFAULT_SLIDE_DURATION, // Recent zone, per photo
   eventsDuration: 5, // Upcoming zone, per event card
+  prayersDuration: 10, // Prayers zone, per bullet item
   tickerSpeed: 30, // news ticker, pixels per second
   tickerEnabled: true, // news ticker on/off, from /control
   fullscreen: { ...DEFAULT_FULLSCREEN },
@@ -285,6 +329,7 @@ function loadConfig() {
       recentRoundDuration:
         Number(parsed.recentRoundDuration) > 0 ? Number(parsed.recentRoundDuration) : DEFAULT_SETTINGS.recentRoundDuration,
       eventsDuration: Number(parsed.eventsDuration) > 0 ? Number(parsed.eventsDuration) : DEFAULT_SETTINGS.eventsDuration,
+      prayersDuration: Number(parsed.prayersDuration) > 0 ? Number(parsed.prayersDuration) : DEFAULT_SETTINGS.prayersDuration,
       tickerSpeed: Number(parsed.tickerSpeed) > 0 ? Number(parsed.tickerSpeed) : DEFAULT_SETTINGS.tickerSpeed,
       tickerEnabled: typeof parsed.tickerEnabled === 'boolean' ? parsed.tickerEnabled : DEFAULT_SETTINGS.tickerEnabled,
       fullscreen: normalizeFullscreen(parsed.fullscreen),
@@ -381,6 +426,8 @@ module.exports = {
   getRecentSlides,
   getUpcomingEvents,
   getNewsTickerText,
+  getPrayersCachePath,
+  getPrayerSlides,
   loadConfig,
   updateSettings,
   isWebcamScheduled,

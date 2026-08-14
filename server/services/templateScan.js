@@ -78,16 +78,17 @@ function findGreenRegions(width, height, data) {
   return regions;
 }
 
-// Maps the 3 detected blobs to named zones by shape/position, not by
+// Maps the 4 detected blobs to named zones by shape/position, not by
 // assuming an exact pixel location - so it tolerates the "slight" drift
 // the designer expects between template revisions. Topology must still
-// match (1 big Featured/center, 1 Upcoming/left, 1 Recent/right) - a real
-// layout change (different box count/arrangement) throws, on purpose,
-// rather than silently guessing wrong.
+// match (1 big Featured/center, 1 Upcoming/left, 2 stacked boxes on the
+// right - Recent above Prayers) - a real layout change (different box
+// count/arrangement) throws, on purpose, rather than silently guessing
+// wrong.
 function classifyZones(regions, canvasWidth) {
-  if (regions.length !== 3) {
+  if (regions.length !== 4) {
     throw new Error(
-      `Expected 3 ${GREEN_LABEL} zones, found ${regions.length}. ` +
+      `Expected 4 ${GREEN_LABEL} zones, found ${regions.length}. ` +
       'This looks like a structural layout change, not a minor position/size tweak - the zone-classification logic in server/services/templateScan.js needs updating to match.'
     );
   }
@@ -100,14 +101,18 @@ function classifyZones(regions, canvasWidth) {
   const left = rest.filter((r) => r.x + r.w / 2 < half);
   const right = rest.filter((r) => r.x + r.w / 2 >= half);
 
-  if (left.length !== 1 || right.length !== 1) {
+  if (left.length !== 1 || right.length !== 2) {
     throw new Error(
-      `Expected 1 left-side box and 1 right-side box among the remaining 2 zones, found ${left.length} left / ${right.length} right. ` +
+      `Expected 1 left-side box and 2 right-side boxes among the remaining 3 zones, found ${left.length} left / ${right.length} right. ` +
       'This looks like a structural layout change, not a minor position/size tweak.'
     );
   }
 
-  return { left: left[0], middle, right: right[0] };
+  // The two right-side boxes stack vertically - Recent on top, Prayers
+  // (new, below it) underneath - so sort by y to tell them apart.
+  const [recent, prayers] = [...right].sort((a, b) => a.y - b.y);
+
+  return { left: left[0], middle, right: recent, prayers };
 }
 
 function scanTemplate(filePath) {

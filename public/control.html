@@ -125,6 +125,10 @@
         <input type="number" id="events-duration" min="1" step="1" />
       </label>
       <label class="field">
+        Prayers (seconds per item)
+        <input type="number" id="prayers-duration" min="1" step="1" />
+      </label>
+      <label class="field">
         News ticker (pixels/second)
         <input type="number" id="ticker-speed" min="1" step="1" />
       </label>
@@ -143,12 +147,21 @@
   </section>
 
   <section>
+    <h2>Weekly Prayer Sync</h2>
+    <div class="status-line">Last fetch: <b id="prayers-time">-</b></div>
+    <div class="status-line">Result: <b id="prayers-result">-</b></div>
+    <div class="status-line">Items fetched: <b id="prayers-count">-</b></div>
+    <button id="prayers-sync-now">Check Now</button>
+    <div class="status-line">Scrapes <code>crosspointchurchsv.org/weekly-prayer</code> for the Prayers box (right column, below Recent). Auto-refreshes on the same schedule as Drive Sync above; use Check Now to pull a freshly-posted update immediately.</div>
+  </section>
+
+  <section>
     <h2>Wall Template Scan</h2>
     <div class="status-line">Last scan: <b id="scan-time">-</b></div>
     <div class="status-line">Result: <b id="scan-result">-</b></div>
     <div class="status-line">Zone sizes: <b id="scan-zones">-</b></div>
     <button id="scan-now">Scan Template Now</button>
-    <div class="status-line">Rescans <code>wall_template_default.jpg</code> for the current green-box positions. Only needed after replacing that file (a few times a year) - not run automatically on startup.</div>
+    <div class="status-line">Rescans <code>wall box positions.jpg</code> for the current green-box positions. Only needed after replacing that file (a few times a year) - not run automatically on startup.</div>
   </section>
 
   <section>
@@ -299,7 +312,17 @@ async function refresh() {
       : `<span class="err">Error: ${data.zoneScan.lastScanError}</span>`;
   const zones = data.zoneScan.zones;
   document.getElementById('scan-zones').textContent = zones
-    ? `Upcoming ${zones.left.w}×${zones.left.h} · Featured ${zones.middle.w}×${zones.middle.h} · Recent ${zones.right.w}×${zones.right.h}`
+    ? `Upcoming ${zones.left.w}×${zones.left.h} · Featured ${zones.middle.w}×${zones.middle.h} · Recent ${zones.right.w}×${zones.right.h} · Prayers ${zones.prayers.w}×${zones.prayers.h}`
+    : '-';
+
+  document.getElementById('prayers-time').textContent = data.prayers.lastFetchAt || 'never';
+  document.getElementById('prayers-result').innerHTML = data.prayers.lastFetchOk === null
+    ? '-'
+    : data.prayers.lastFetchOk
+      ? '<span class="ok">OK</span>'
+      : `<span class="err">Error: ${data.prayers.lastFetchError}</span>`;
+  document.getElementById('prayers-count').textContent = data.prayers.counts
+    ? `${data.prayers.counts.zh} 中文 · ${data.prayers.counts.en} English`
     : '-';
 
   renderItems(document.getElementById('playlist-list'), data.playlist);
@@ -310,10 +333,12 @@ async function refresh() {
   const mainInput = document.getElementById('main-slide-duration');
   const recentInput = document.getElementById('recent-round-duration');
   const eventsInput = document.getElementById('events-duration');
+  const prayersInput = document.getElementById('prayers-duration');
   const tickerInput = document.getElementById('ticker-speed');
   if (document.activeElement !== mainInput) mainInput.value = data.settings.mainSlideDuration;
   if (document.activeElement !== recentInput) recentInput.value = data.settings.recentRoundDuration;
   if (document.activeElement !== eventsInput) eventsInput.value = data.settings.eventsDuration;
+  if (document.activeElement !== prayersInput) prayersInput.value = data.settings.prayersDuration;
   if (document.activeElement !== tickerInput) tickerInput.value = data.settings.tickerSpeed;
 }
 
@@ -370,6 +395,16 @@ document.getElementById('sync-now').onclick = async (e) => {
   await api('/sync-now', { method: 'POST' });
   e.target.disabled = false;
   e.target.textContent = 'Check Now';
+  refresh();
+};
+
+document.getElementById('prayers-sync-now').onclick = async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = 'Fetching...';
+  const result = await api('/prayers-sync-now', { method: 'POST' });
+  e.target.disabled = false;
+  e.target.textContent = 'Check Now';
+  if (!result.ok) alert(`Fetch failed: ${result.error}`);
   refresh();
 };
 
@@ -441,10 +476,11 @@ document.getElementById('save-timing').onclick = async () => {
   const mainSlideDuration = document.getElementById('main-slide-duration').value;
   const recentRoundDuration = document.getElementById('recent-round-duration').value;
   const eventsDuration = document.getElementById('events-duration').value;
+  const prayersDuration = document.getElementById('prayers-duration').value;
   const tickerSpeed = document.getElementById('ticker-speed').value;
   const result = await api('/settings', {
     method: 'POST',
-    body: JSON.stringify({ mainSlideDuration, recentRoundDuration, eventsDuration, tickerSpeed }),
+    body: JSON.stringify({ mainSlideDuration, recentRoundDuration, eventsDuration, prayersDuration, tickerSpeed }),
   });
   if (result.error) {
     alert(result.error);
