@@ -63,20 +63,24 @@ command -v npm >/dev/null 2>&1 || die "npm not found"
 command -v pm2 >/dev/null 2>&1 || die "pm2 not found (npm install -g pm2)"
 command -v node >/dev/null 2>&1 || die "node not found"
 
-# ---- git pull --------------------------------------------------------------
-step "git pull"
+# ---- match GitHub (discard local edits to tracked files) -------------------
+step "git fetch + reset to GitHub"
+
+if ! upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"; then
+  die "this branch has no upstream (git branch -u origin/<branch>)"
+fi
 
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  echo "working tree has local changes that would block a clean pull:"
+  echo "discarding local changes to tracked files (GitHub wins):"
   git status --short --untracked-files=no
-  die "commit, stash, or discard those files on the Mini, then re-run"
 fi
 
 before="$(git rev-parse --short HEAD)"
 git fetch --prune
-git pull --ff-only
+git reset --hard "$upstream"
 after="$(git rev-parse --short HEAD)"
 echo "HEAD $before -> $after  ($(git log -1 --pretty=format:'%s'))"
+echo "untracked / gitignored files (.env, wall-config.json, media, credentials) left alone"
 
 # ---- install deps (no compile step in this repo) ---------------------------
 step "npm install"
