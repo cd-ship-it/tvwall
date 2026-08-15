@@ -36,6 +36,14 @@ On the Mini (auto-login user), after `.env` / credentials / `npm install` / a wo
 
 Logs: `~/Library/Logs/TVWall/`. See script headers for smoke-test commands.
 
+To pull latest code and bounce the wall over SSH (git pull, `npm install`, pm2 restart, Chrome kiosk restart):
+
+```
+./deploy/kiosk/refresh.sh
+```
+
+From your laptop: `ssh ssh-tvwall.xpch.cc '~/TVWall/deploy/kiosk/refresh.sh'` (adjust the repo path if it isn't `~/TVWall`).
+
 ## Cloudflare Tunnel + Access (remote `/control`)
 
 Staff can open `/control` from any browser without Tailscale. Artifacts live in `deploy/cloudflare/`:

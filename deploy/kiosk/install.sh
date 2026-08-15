@@ -15,7 +15,7 @@ AGENTS="${HOME}/Library/LaunchAgents"
 LOG_DIR="${HOME}/Library/Logs/TVWall"
 
 mkdir -p "$AGENTS" "$LOG_DIR"
-chmod +x "$DIR/start-server.sh" "$DIR/start-chrome.sh"
+chmod +x "$DIR/start-server.sh" "$DIR/start-chrome.sh" "$DIR/refresh.sh"
 
 render() {
   local src="$1"

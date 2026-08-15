@@ -58,14 +58,13 @@ token is cached under `~/.cloudflared/` until the app's session duration expires
 
 ## Day-to-day deploys
 
+Clean flush (pull latest, install deps, restart server + Chrome kiosk):
+
 ```bash
-ssh ssh-tvwall.xpch.cc
-cd ~/TVWall
-git pull
-pm2 restart tvwall     # or click Restart Server on /control
+ssh ssh-tvwall.xpch.cc '~/TVWall/deploy/kiosk/refresh.sh'
 ```
 
-Frontend-only changes need no SSH at all — use **Refresh Display** on `/control`.
+Adjust the path if the repo isn't `~/TVWall` on the Mini. Frontend-only changes need no SSH at all — use **Refresh Display** on `/control`.
 
 ## Notes
 
