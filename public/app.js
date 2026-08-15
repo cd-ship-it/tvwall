@@ -139,8 +139,12 @@ const middlePlayer = new SequencePlayer(
 //   2. then orphan images in recent/ (untitled - title hidden)
 //   3. if nothing at all → comingSoon ("coming soon" on white)
 class RecentEventsPlayer {
-  constructor(imageEl, titleEl, comingSoonEl) {
+  constructor(imageEl, imageBlurEl, titleEl, comingSoonEl) {
     this.imageEl = imageEl;
+    // Blurred, scaled-up copy of the same photo behind the shrunk-to-fit
+    // foreground - same letterbox-filling trick as SequencePlayer's
+    // middle-image-blur (see .blur-backdrop in style.css).
+    this.imageBlurEl = imageBlurEl || null;
     this.titleEl = titleEl;
     this.comingSoonEl = comingSoonEl;
     this.items = []; // [{ title, file }], in display order
@@ -161,6 +165,7 @@ class RecentEventsPlayer {
       this.timeoutHandle = null;
       this.lastRoundIndex = null;
       this.imageEl.classList.remove('visible');
+      if (this.imageBlurEl) this.imageBlurEl.classList.remove('visible');
       this._setTitle('');
       this.comingSoonEl.classList.add('visible');
       return;
@@ -182,8 +187,13 @@ class RecentEventsPlayer {
   _render(roundIndex) {
     this.lastRoundIndex = roundIndex;
     const item = this.items[roundIndex % this.items.length];
-    this.imageEl.src = `/media/recent/${encodeURIComponent(item.file)}`;
+    const src = `/media/recent/${encodeURIComponent(item.file)}`;
+    this.imageEl.src = src;
     this.imageEl.classList.add('visible');
+    if (this.imageBlurEl) {
+      this.imageBlurEl.src = src;
+      this.imageBlurEl.classList.add('visible');
+    }
     this._setTitle(item.title || '');
   }
 
@@ -217,6 +227,7 @@ class RecentEventsPlayer {
 
 const recentEventsPlayer = new RecentEventsPlayer(
   document.getElementById('recent-photo'),
+  document.getElementById('recent-photo-blur'),
   document.getElementById('recent-event-title'),
   document.getElementById('recent-coming-soon')
 );

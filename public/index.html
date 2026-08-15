@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>TV Wall</title>
-<link rel="stylesheet" href="style.css?v=recent-blur2" />
+<link rel="stylesheet" href="style.css?v=recent-blur3" />
 <!-- Auto-generated from "wall box positions.jpg" by a manual scan
      (server/services/zonePositions.js) - loaded after style.css so its
      :root values win. -->
@@ -42,7 +42,8 @@
          Title sits below the box (same width), driven by RecentEventsPlayer. -->
     <div class="recent-event-title" id="recent-event-title"></div>
     <div class="zone zone-right" id="zone-right">
-      <img class="fit-cover" id="recent-photo" alt="" />
+      <img class="fit-cover blur-backdrop" id="recent-photo-blur" alt="" />
+      <img class="fit-contain" id="recent-photo" alt="" />
       <div class="recent-coming-soon" id="recent-coming-soon">coming soon</div>
     </div>
 
@@ -73,6 +74,6 @@
       <img id="fullscreen-image" class="fit-contain" alt="" />
     </div>
   </div>
-  <script src="app.js?v=recent-blur2"></script>
+  <script src="app.js?v=recent-blur3"></script>
 </body>
 </html>
