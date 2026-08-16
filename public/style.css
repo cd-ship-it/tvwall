@@ -335,8 +335,8 @@ body {
 
 .event-date-box {
   flex-shrink: 0;
-  width: 78px;
-  height: 78px;
+  width: 88px;
+  height: 98px;
   box-sizing: border-box;
   border: 2px solid #fff;
   border-radius: 4px;
@@ -347,7 +347,7 @@ body {
 }
 
 .event-date-month {
-  font-size: 14px;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -461,4 +461,41 @@ body {
 .fullscreen-overlay img.fit-contain.visible,
 .fullscreen-overlay video.fit-contain.visible {
   display: block;
+}
+
+#manual-overlay {
+  pointer-events: auto;
+}
+
+#manual-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: none;
+  background: #fff;
+  z-index: 1;
+}
+
+#manual-frame.visible {
+  display: block;
+}
+
+.cover-message {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 64px;
+  font-weight: 600;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.02em;
+  z-index: 2;
+}
+
+.cover-message.visible {
+  display: flex;
 }

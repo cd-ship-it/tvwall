@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>TV Wall</title>
-<link rel="stylesheet" href="style.css?v=recent-blur3" />
+<link rel="stylesheet" href="style.css?v=hours2" />
 <!-- Auto-generated from "wall box positions.jpg" by a manual scan
      (server/services/zonePositions.js) - loaded after style.css so its
      :root values win. -->
@@ -66,14 +66,19 @@
       <div class="news-ticker-track" id="news-ticker-track"></div>
     </div>
 
-    <!-- Fullscreen override: covers the entire canvas (zones + ticker)
-         during a scheduled window or Force On from /control. Media from
-         media/<campus>/fullscreen_img/. -->
+    <!-- Full-canvas covers: fullscreen one-shot, Manual URL, or off-hours black. -->
     <div class="fullscreen-overlay" id="fullscreen-overlay" aria-hidden="true">
       <video id="fullscreen-video" class="fit-contain" playsinline muted loop></video>
       <img id="fullscreen-image" class="fit-contain" alt="" />
+      <div class="cover-message" id="fullscreen-missing">image not found</div>
     </div>
+    <div class="fullscreen-overlay" id="manual-overlay" aria-hidden="true">
+      <img id="manual-image" class="fit-contain" alt="" />
+      <iframe id="manual-frame" title="Manual URL"></iframe>
+      <div class="cover-message" id="manual-missing">image not found</div>
+    </div>
+    <div class="fullscreen-overlay" id="off-overlay" aria-hidden="true"></div>
   </div>
-  <script src="app.js?v=recent-blur3"></script>
+  <script src="app.js?v=hours2"></script>
 </body>
 </html>

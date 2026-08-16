@@ -5,10 +5,17 @@ const {
   getFullscreenFiles,
   loadConfig,
   updateSettings,
-  DAY_NAMES,
-  normalizeClock,
-  parseTimeToMinutes,
 } = require('../services/playlist');
+const {
+  validateRegularHours,
+  validateManual,
+  validateFullscreen,
+  validateSyncSchedule,
+  describeNow,
+  describeSyncCadence,
+  wallClock,
+  weekPreview,
+} = require('../services/hours');
 const { state, setOverride, skipToItem, requestReload } = require('../state');
 const { syncDriveFolder } = require('../services/driveSync');
 const { fetchPrayers } = require('../services/prayerSync');
@@ -29,18 +36,34 @@ router.get('/', (req, res) => {
 router.get('/api/status', (req, res) => {
   const playlist = getPlaylist();
   const config = loadConfig();
+  const now = new Date();
+  let display = describeNow(config, now);
+  if (state.overrides.devShowDashboard) {
+    display = {
+      ...display,
+      mode: 'playlist',
+      label: 'Dashboard (dev)',
+      untilLabel: 'until you refresh /control',
+      showingLine: 'Wall is showing Dashboard (dev) until you refresh /control',
+    };
+  }
   res.json({
     mode: state.mode,
-    overrides: state.overrides,
     skip: state.skip,
     sync: state.sync,
     zoneScan: state.zoneScan,
     prayers: state.prayers,
-    webcam: state.webcam,
     playlist: playlist.playlist,
-    webcamSchedule: playlist.webcamSchedule,
     fullscreenFiles: getFullscreenFiles(),
     fullscreen: config.fullscreen,
+    regularHours: config.regularHours,
+    manual: config.manual,
+    syncSchedule: config.syncSchedule,
+    syncCadence: describeSyncCadence(config.syncSchedule, now),
+    devShowDashboard: !!state.overrides.devShowDashboard,
+    wallClock: wallClock(now),
+    display,
+    weekPreview: weekPreview(config, now),
     settings: {
       mainSlideDuration: config.mainSlideDuration,
       recentRoundDuration: config.recentRoundDuration,
@@ -94,102 +117,116 @@ router.post('/api/ticker', express.json(), (req, res) => {
   res.json({ ok: true, tickerEnabled: config.tickerEnabled });
 });
 
-router.post('/api/webcam', express.json(), (req, res) => {
-  const { force } = req.body; // 'on' | 'off' | null
-  if (![null, 'on', 'off'].includes(force)) {
-    return res.status(400).json({ error: "force must be 'on', 'off', or null" });
+// In-memory debug override. Not written to wall-config.json. Cleared when
+// the /control page loads (and on process restart).
+router.post('/api/dev-dashboard', express.json(), (req, res) => {
+  if (typeof req.body.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be true or false' });
   }
-  setOverride({ webcamForce: force });
+  setOverride({ devShowDashboard: req.body.enabled });
   state.mode = computeMode();
-  res.json({ ok: true, overrides: state.overrides, mode: state.mode });
-});
-
-// Persist fullscreen schedule + selected file into wall-config.json.
-router.post('/api/fullscreen', express.json(), (req, res) => {
-  const { file, start, end, days } = req.body;
-  const available = getFullscreenFiles();
-  const availableNames = new Set(available.map((f) => f.file));
-
-  let nextFile = null;
-  if (file !== null && file !== undefined && file !== '') {
-    if (typeof file !== 'string' || !availableNames.has(file)) {
-      return res.status(400).json({ error: 'file must be a name from fullscreen_img (JPG/PNG/video)' });
-    }
-    nextFile = file;
-  }
-
-  const startNorm = normalizeClock(start);
-  const endNorm = normalizeClock(end);
-  if (!startNorm) {
-    return res.status(400).json({ error: 'start must be HH:MM' });
-  }
-  if (!endNorm) {
-    return res.status(400).json({ error: 'end must be HH:MM' });
-  }
-  if (parseTimeToMinutes(endNorm) <= parseTimeToMinutes(startNorm)) {
-    return res.status(400).json({ error: 'end must be after start (no overnight windows)' });
-  }
-  if (!Array.isArray(days) || days.some((d) => !DAY_NAMES.includes(d))) {
-    return res.status(400).json({ error: `days must be an array of ${DAY_NAMES.join(', ')}` });
-  }
-
-  const config = updateSettings({
-    fullscreen: {
-      ...loadConfig().fullscreen,
-      file: nextFile,
-      start: startNorm,
-      end: endNorm,
-      days: [...new Set(days)],
-    },
-  });
-  state.mode = computeMode();
-  res.json({ ok: true, fullscreen: config.fullscreen, mode: state.mode });
-});
-
-router.post('/api/fullscreen-force', express.json(), (req, res) => {
-  const { force, file } = req.body; // force: 'on' | 'off' | null; optional file when forcing on
-  if (![null, 'on', 'off'].includes(force)) {
-    return res.status(400).json({ error: "force must be 'on', 'off', or null" });
-  }
-
   const config = loadConfig();
-  let nextFile = config.fullscreen.file;
-
-  if (force === 'on') {
-    // Allow Force On to pin the dropdown selection without requiring a
-    // full schedule save (start/end/days) first.
-    if (file !== undefined && file !== null && file !== '') {
-      if (typeof file !== 'string') {
-        return res.status(400).json({ error: 'file must be a string' });
-      }
-      const availableNames = new Set(getFullscreenFiles().map((f) => f.file));
-      if (!availableNames.has(file)) {
-        return res.status(400).json({ error: 'file must be a name from fullscreen_img (JPG/PNG/video)' });
-      }
-      nextFile = file;
-    }
-
-    if (!nextFile) {
-      return res.status(400).json({ error: 'Select a fullscreen image/video before Force On' });
-    }
-  }
-
-  // Persist force (+ optional file) so a nodemon/pm2 restart does not clear
-  // Force On the way a pure in-memory override would.
-  updateSettings({
-    fullscreen: {
-      ...config.fullscreen,
-      file: force === 'on' ? nextFile : config.fullscreen.file,
-      force,
-    },
+  res.json({
+    ok: true,
+    devShowDashboard: !!state.overrides.devShowDashboard,
+    mode: state.mode,
+    display: state.overrides.devShowDashboard
+      ? {
+          ...describeNow(config),
+          mode: 'playlist',
+          label: 'Dashboard (dev)',
+          untilLabel: 'until you refresh /control',
+          showingLine: 'Wall is showing Dashboard (dev) until you refresh /control',
+        }
+      : describeNow(config),
   });
-  setOverride({ fullscreenForce: force });
+});
+
+router.post('/api/sync-schedule', express.json(), (req, res) => {
+  const result = validateSyncSchedule(req.body);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+  const config = updateSettings({ syncSchedule: result.syncSchedule });
+  res.json({
+    ok: true,
+    syncSchedule: config.syncSchedule,
+    syncCadence: describeSyncCadence(config.syncSchedule),
+  });
+});
+
+router.post('/api/regular-hours', express.json(), (req, res) => {
+  const result = validateRegularHours(req.body.windows);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+  const config = updateSettings({ regularHours: result.windows });
   state.mode = computeMode();
   res.json({
     ok: true,
-    overrides: state.overrides,
+    regularHours: config.regularHours,
     mode: state.mode,
-    fullscreen: loadConfig().fullscreen,
+    display: describeNow(config),
+    weekPreview: weekPreview(config),
+  });
+});
+
+router.post('/api/manual', express.json(), (req, res) => {
+  const result = validateManual(req.body);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+  const config = updateSettings({ manual: result.manual });
+  state.mode = computeMode();
+  res.json({
+    ok: true,
+    manual: config.manual,
+    mode: state.mode,
+    display: describeNow(config),
+    weekPreview: weekPreview(config),
+  });
+});
+
+// One-shot fullscreen window. File must exist on disk; both datetimes required.
+router.post('/api/fullscreen', express.json(), (req, res) => {
+  const availableNames = new Set(getFullscreenFiles().map((f) => f.file));
+  const result = validateFullscreen(req.body, availableNames);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+  const config = updateSettings({
+    fullscreen: {
+      ...loadConfig().fullscreen,
+      ...result.fullscreen,
+    },
+  });
+  state.mode = computeMode();
+  res.json({
+    ok: true,
+    fullscreen: config.fullscreen,
+    mode: state.mode,
+    display: describeNow(config),
+    weekPreview: weekPreview(config),
+  });
+});
+
+// Wipe the one-shot window; Regular Hours / Manual / black take over immediately.
+router.post('/api/fullscreen-cancel', express.json(), (req, res) => {
+  const current = loadConfig().fullscreen;
+  const config = updateSettings({
+    fullscreen: {
+      ...current,
+      startAt: null,
+      endAt: null,
+    },
+  });
+  state.mode = computeMode();
+  res.json({
+    ok: true,
+    fullscreen: config.fullscreen,
+    mode: state.mode,
+    display: describeNow(config),
+    weekPreview: weekPreview(config),
   });
 });
 

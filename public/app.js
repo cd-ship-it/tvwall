@@ -1,6 +1,30 @@
 const POLL_INTERVAL_MS = 5000;
 const WEBCAM_RETRY_MS = 5000;
 
+// Encode each path segment so nested Drive-mirrored files
+// (e.g. recent/camp/01.jpg) stay real subdirectories for /media.
+function encodeMediaPath(file) {
+  return String(file || '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+}
+
+function randomCacheParam() {
+  return Math.floor(Math.random() * 1e12);
+}
+
+function mediaUrl(zone, file) {
+  const encoded = encodeMediaPath(file);
+  const path = zone ? `/media/${zone}/${encoded}` : `/media/${encoded}`;
+  return `${path}?r=${randomCacheParam()}`;
+}
+
+const wallBackgroundEl = document.querySelector('.wall-background');
+if (wallBackgroundEl) {
+  wallBackgroundEl.src = `assets/wall-background.jpg?r=${randomCacheParam()}`;
+}
+
 // Drives a video/image playlist inside one zone: videos play their natural
 // length (letterboxed, gap filled by a blurred backdrop - see
 // _captureVideoFrame), images show for their configured `duration` with a
@@ -88,8 +112,7 @@ class SequencePlayer {
 
   _play(item) {
     clearTimeout(this.timeoutHandle);
-    const prefix = this.baseDir ? `${this.baseDir}/` : '';
-    const src = `/media/${prefix}${encodeURIComponent(item.file)}`;
+    const src = mediaUrl(this.baseDir, item.file);
 
     if (item.type === 'video') {
       this.imageEl.classList.remove('visible');
@@ -187,7 +210,7 @@ class RecentEventsPlayer {
   _render(roundIndex) {
     this.lastRoundIndex = roundIndex;
     const item = this.items[roundIndex % this.items.length];
-    const src = `/media/recent/${encodeURIComponent(item.file)}`;
+    const src = mediaUrl('recent', item.file);
     this.imageEl.src = src;
     this.imageEl.classList.add('visible');
     if (this.imageBlurEl) {
@@ -630,16 +653,40 @@ const newsTicker = new NewsTicker(
 );
 newsTicker.start();
 
-// ---- Fullscreen override (covers entire wall including ticker) ----
+// ---- Full-canvas covers (fullscreen one-shot / Manual URL / off-hours) ----
 const fullscreenOverlay = document.getElementById('fullscreen-overlay');
 const fullscreenVideoEl = document.getElementById('fullscreen-video');
 const fullscreenImageEl = document.getElementById('fullscreen-image');
+const fullscreenMissingEl = document.getElementById('fullscreen-missing');
+const manualOverlay = document.getElementById('manual-overlay');
+const manualImageEl = document.getElementById('manual-image');
+const manualFrameEl = document.getElementById('manual-frame');
+const manualMissingEl = document.getElementById('manual-missing');
+const offOverlay = document.getElementById('off-overlay');
 let fullscreenActive = false;
 let fullscreenSrc = null;
+let manualSrc = null;
 
-function showFullscreenMedia(item) {
-  fullscreenOverlay.classList.add('visible');
-  fullscreenOverlay.setAttribute('aria-hidden', 'false');
+function isImageUrl(url) {
+  try {
+    return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function showCover(el) {
+  el.classList.add('visible');
+  el.setAttribute('aria-hidden', 'false');
+}
+
+function hideCover(el) {
+  el.classList.remove('visible');
+  el.setAttribute('aria-hidden', 'true');
+}
+
+function showFullscreenMedia(item, syncStamp) {
+  showCover(fullscreenOverlay);
   fullscreenActive = true;
 
   if (!item || !item.file) {
@@ -648,39 +695,52 @@ function showFullscreenMedia(item) {
     fullscreenVideoEl.removeAttribute('src');
     fullscreenImageEl.classList.remove('visible');
     fullscreenImageEl.removeAttribute('src');
+    fullscreenMissingEl.classList.add('visible');
     fullscreenSrc = null;
     return;
   }
 
-  const src = `/media/fullscreen_img/${encodeURIComponent(item.file)}`;
-  if (src === fullscreenSrc && item.type === 'video' && !fullscreenVideoEl.paused) return;
-  if (src === fullscreenSrc && item.type === 'image' && fullscreenImageEl.classList.contains('visible')) return;
-  fullscreenSrc = src;
+  const path = `/media/fullscreen_img/${encodeMediaPath(item.file)}`;
+  // Identity is path + last Drive sync, not the random ?r= — otherwise the
+  // 5s poll would restart a looping video every tick. A new sync stamp
+  // still forces a fresh r so a same-name replacement is not cached.
+  const key = `${path}|${item.type}|${syncStamp || ''}`;
+  if (key === fullscreenSrc && item.type === 'video' && !fullscreenVideoEl.paused) return;
+  if (key === fullscreenSrc && item.type === 'image' && fullscreenImageEl.classList.contains('visible')) return;
+  fullscreenSrc = key;
+  const src = `${path}?r=${randomCacheParam()}`;
+  fullscreenMissingEl.classList.remove('visible');
 
   if (item.type === 'video') {
     fullscreenImageEl.classList.remove('visible');
     fullscreenImageEl.removeAttribute('src');
+    fullscreenVideoEl.onerror = () => {
+      fullscreenVideoEl.classList.remove('visible');
+      fullscreenMissingEl.classList.add('visible');
+    };
     fullscreenVideoEl.classList.add('visible');
-    if (fullscreenVideoEl.getAttribute('src') !== src) {
-      fullscreenVideoEl.src = src;
-    }
+    fullscreenVideoEl.src = src;
     const playPromise = fullscreenVideoEl.play();
     if (playPromise && playPromise.catch) playPromise.catch(() => {});
   } else {
     fullscreenVideoEl.classList.remove('visible');
     fullscreenVideoEl.pause();
     fullscreenVideoEl.removeAttribute('src');
-    fullscreenImageEl.classList.add('visible');
-    if (fullscreenImageEl.getAttribute('src') !== src) {
-      fullscreenImageEl.src = src;
-    }
+    fullscreenImageEl.onload = () => {
+      fullscreenMissingEl.classList.remove('visible');
+      fullscreenImageEl.classList.add('visible');
+    };
+    fullscreenImageEl.onerror = () => {
+      fullscreenImageEl.classList.remove('visible');
+      fullscreenMissingEl.classList.add('visible');
+    };
+    fullscreenImageEl.src = src;
   }
 }
 
 function hideFullscreenMedia() {
   if (!fullscreenActive && !fullscreenOverlay.classList.contains('visible')) return;
-  fullscreenOverlay.classList.remove('visible');
-  fullscreenOverlay.setAttribute('aria-hidden', 'true');
+  hideCover(fullscreenOverlay);
   fullscreenActive = false;
   fullscreenSrc = null;
   fullscreenVideoEl.classList.remove('visible');
@@ -688,6 +748,69 @@ function hideFullscreenMedia() {
   fullscreenVideoEl.removeAttribute('src');
   fullscreenImageEl.classList.remove('visible');
   fullscreenImageEl.removeAttribute('src');
+  fullscreenMissingEl.classList.remove('visible');
+}
+
+function clearManualMedia() {
+  manualImageEl.classList.remove('visible');
+  manualImageEl.removeAttribute('src');
+  manualImageEl.onload = null;
+  manualImageEl.onerror = null;
+  manualFrameEl.classList.remove('visible');
+  manualFrameEl.removeAttribute('src');
+  manualMissingEl.classList.remove('visible');
+}
+
+function showManualFrame(url) {
+  manualImageEl.classList.remove('visible');
+  manualMissingEl.classList.remove('visible');
+  manualFrameEl.classList.add('visible');
+  if (manualFrameEl.getAttribute('src') !== url) {
+    manualFrameEl.src = url;
+  }
+}
+
+function showManualUrl(url) {
+  showCover(manualOverlay);
+  if (!url) {
+    clearManualMedia();
+    manualMissingEl.classList.add('visible');
+    manualSrc = null;
+    return;
+  }
+  if (url === manualSrc) return;
+  manualSrc = url;
+  clearManualMedia();
+
+  if (!isImageUrl(url)) {
+    showManualFrame(url);
+    return;
+  }
+
+  manualImageEl.onload = () => {
+    manualMissingEl.classList.remove('visible');
+    manualFrameEl.classList.remove('visible');
+    manualImageEl.classList.add('visible');
+  };
+  manualImageEl.onerror = () => {
+    showManualFrame(url);
+  };
+  manualImageEl.src = url;
+}
+
+function hideManualOverlay() {
+  if (!manualOverlay.classList.contains('visible')) return;
+  hideCover(manualOverlay);
+  manualSrc = null;
+  clearManualMedia();
+}
+
+function showOffOverlay() {
+  showCover(offOverlay);
+}
+
+function hideOffOverlay() {
+  hideCover(offOverlay);
 }
 
 // ---- Middle-box mode switching (webcam / playlist / feed-unavailable) ----
@@ -781,32 +904,40 @@ async function pollState() {
       lastReloadNonce = data.reload.nonce;
     }
 
+    // Keep dashboard players fed under every cover so leaving a mode
+    // resumes cleanly instead of rebuilding from a cold start.
+    middlePlayer.setItems(data.playlist);
+    recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
+    eventsPlayer.setEvents(data.events, data.eventsDuration);
+    prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
+
     if (data.mode === 'fullscreen') {
-      showFullscreenMedia(data.fullscreen);
+      hideManualOverlay();
+      hideOffOverlay();
+      showFullscreenMedia(data.fullscreen, data.sync && data.sync.lastSyncAt);
       stopWebcamMode();
-      // Keep dashboard players fed so leaving fullscreen resumes cleanly,
-      // but hide ticker while the overlay covers everything.
-      middlePlayer.setItems(data.playlist);
-      recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
-      eventsPlayer.setEvents(data.events, data.eventsDuration);
-      prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
+      newsTicker.setEnabled(false);
+    } else if (data.mode === 'manual') {
+      hideFullscreenMedia();
+      hideOffOverlay();
+      showManualUrl(data.manualUrl);
+      stopWebcamMode();
+      newsTicker.setEnabled(false);
+    } else if (data.mode === 'off') {
+      hideFullscreenMedia();
+      hideManualOverlay();
+      showOffOverlay();
+      stopWebcamMode();
       newsTicker.setEnabled(false);
     } else {
       hideFullscreenMedia();
-      middlePlayer.setItems(data.playlist);
-      recentEventsPlayer.setData(data.recentSlides, data.recentRoundDuration, data.recentComingSoon);
-      eventsPlayer.setEvents(data.events, data.eventsDuration);
-      prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
+      hideManualOverlay();
+      hideOffOverlay();
       newsTicker.setText(data.tickerText);
       newsTicker.setSpeed(data.tickerSpeed);
       newsTicker.setEnabled(data.tickerEnabled !== false);
-
-      if (data.mode === 'webcam') {
-        startWebcamMode();
-      } else {
-        stopWebcamMode();
-        showMainLayer('playlist');
-      }
+      stopWebcamMode();
+      showMainLayer('playlist');
     }
 
     if (lastSkipNonce !== null && data.skip.nonce !== lastSkipNonce && data.skip.index !== null) {

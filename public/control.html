@@ -11,7 +11,7 @@
     color: #eee;
     margin: 0;
     padding: 24px;
-    max-width: 900px;
+    max-width: 960px;
   }
   h1 { font-size: 20px; margin-bottom: 4px; }
   h2 { font-size: 15px; margin: 28px 0 8px; color: #9ab; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -22,6 +22,7 @@
   }
   button:hover { filter: brightness(1.1); }
   button.secondary { background: #444; }
+  button.danger { background: #833; }
   button.active { outline: 2px solid #6f6; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .status-line { font-size: 13px; color: #aaa; margin: 4px 0; }
@@ -43,62 +44,187 @@
   .err { color: #f66; }
   .days { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #ccc; }
   .days label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-  .field select, .field input[type="time"] {
+  .field select, .field input[type="time"], .field input[type="datetime-local"], .field input[type="url"] {
     background: #222; border: 1px solid #333; color: #eee;
     padding: 6px 8px; border-radius: 6px; font-size: 14px; width: auto; min-width: 160px;
   }
+  .field input[type="datetime-local"] { min-width: 230px; }
+  .field input[type="url"] { min-width: 360px; width: 100%; max-width: 560px; }
   .hint { font-size: 12px; color: #777; margin-top: 8px; }
+  .clock { font-size: 14px; color: #9ab; margin: 6px 0; }
+  .mode-status {
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 12px 0 16px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+  }
+  .mode-status.playlist { border-color: #2a4; background: #122418; }
+  .mode-status.off { border-color: #444; background: #141414; }
+  .mode-status.fullscreen { border-color: #c90; background: #2a2208; }
+  .mode-status.manual { border-color: #36a; background: #121828; }
+  .mode-status-kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ab;
+    margin-bottom: 4px;
+  }
+  .mode-status-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #fff;
+  }
+  .mode-status.off .mode-status-value { color: #ccc; }
+  .mode-status.playlist .mode-status-value { color: #8d8; }
+  .mode-status.fullscreen .mode-status-value { color: #fc6; }
+  .mode-status.manual .mode-status-value { color: #8bf; }
+  .mode-status-detail { font-size: 14px; color: #bbb; margin-top: 6px; }
+  .banner {
+    background: #332; border: 1px solid #664; padding: 8px 12px;
+    border-radius: 6px; margin: 8px 0; color: #fc8; font-size: 13px;
+  }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #aaa; margin: 8px 0; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .swatch.off { background: #2a2a2a; }
+  .swatch.playlist { background: #2a4; }
+  .swatch.fullscreen { background: #c90; }
+  .swatch.manual { background: #36a; }
+  .week-day { margin: 8px 0; }
+  .week-head { display: flex; align-items: baseline; gap: 10px; font-size: 12px; margin-bottom: 4px; }
+  .week-name { width: 92px; color: #ccc; flex-shrink: 0; }
+  .week-name .today { color: #6f6; }
+  .week-summary { color: #777; }
+  .week-bar-wrap { position: relative; padding-top: 22px; }
+  .week-bar { height: 16px; display: flex; background: #111; border-radius: 3px; overflow: hidden; }
+  .week-seg { height: 100%; }
+  .week-seg.off { background: #2a2a2a; }
+  .week-seg.playlist { background: #2a4; }
+  .week-seg.fullscreen { background: #c90; }
+  .week-seg.manual { background: #36a; }
+  .week-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
+    pointer-events: none;
+    width: 0;
+  }
+  .week-now-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 600;
+    color: #111;
+    background: #f6c;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 16px;
+    transform: translateX(-50%);
+  }
+  .week-now-arrow {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 0;
+    height: 0;
+    border: 5px solid transparent;
+    border-top-color: #f6c;
+    transform: translateX(-50%);
+  }
+  .week-now-line {
+    position: absolute;
+    top: 20px;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: #f6c;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  }
+  .week-ticks { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-top: 2px; }
+  .hours-row {
+    border: 1px solid #2a2a2a; border-radius: 6px; padding: 10px 12px; margin: 8px 0;
+  }
 </style>
 </head>
 <body>
   <h1>TV Wall Control</h1>
-  <div class="status-line">Mode: <b id="mode-value">-</b></div>
-  <div class="status-line">Fullscreen media: <b id="fullscreen-media-label">-</b></div>
+  <div class="clock">Wall clock: <b id="wall-clock">-</b></div>
+  <div class="mode-status off" id="mode-status">
+    <div class="mode-status-kicker">Display mode</div>
+    <div class="mode-status-value" id="mode-status-value">—</div>
+    <div class="mode-status-detail" id="mode-status-detail"></div>
+    <div class="row" style="margin-top: 10px;">
+      <button id="dev-dashboard" class="secondary">Show Dashboard for dev</button>
+    </div>
+  </div>
+  <div class="banner" id="manual-banner" style="display:none;"></div>
 
   <section>
-    <h2>Fullscreen Override</h2>
-    <div class="row" style="margin-bottom: 12px;">
-      <button id="fullscreen-on">Force On</button>
-      <button id="fullscreen-off">Force Off</button>
-      <button id="fullscreen-auto" class="secondary">Follow Schedule</button>
+    <h2>Manual URL</h2>
+    <div class="row">
+      <button id="manual-on">Manual On</button>
+      <button id="manual-off" class="secondary">Manual Off</button>
     </div>
+    <div class="row" style="margin-top: 8px;">
+      <label class="field">
+        URL
+        <input type="url" id="manual-url" placeholder="https://example.com/wall.jpg" />
+      </label>
+    </div>
+    <div class="hint">Rare override. Stays on until you hit Manual Off. Image URLs fill the wall; other URLs load as a webpage. Some sites (e.g. intel.com) block embedding and will stay blank — use a direct image URL or a page that allows embedding. Fullscreen still wins if its window is active.</div>
+  </section>
+
+  <section>
+    <h2>This week</h2>
+    <div class="legend">
+      <span><i class="swatch playlist"></i>Dashboard</span>
+      <span><i class="swatch off"></i>Black</span>
+      <span><i class="swatch fullscreen"></i>Fullscreen</span>
+      <span><i class="swatch manual"></i>Manual URL</span>
+    </div>
+    <div id="week-preview"></div>
+    <div class="week-ticks"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span></div>
+    <div class="hint">Every minute is one of these four. Clock is this machine (the box that runs the dashboard).</div>
+  </section>
+
+  <section>
+    <h2>Regular Hours</h2>
+    <div id="regular-hours-list"></div>
+    <div class="row" style="margin-top: 8px;">
+      <button id="add-hours" class="secondary">Add weekly window</button>
+      <button id="save-hours">Save Regular Hours</button>
+      <span class="save-note" id="hours-saved" style="display:none;">Saved</span>
+    </div>
+    <div class="hint">Default is Sunday 9:00am–3:00pm. Same-day windows only (no overnight). Overlapping windows are rejected. Empty list = black except Fullscreen / Manual.</div>
+  </section>
+
+  <section>
+    <h2>Fullscreen Image (one-shot)</h2>
+    <div class="status-line">Selected file: <b id="fullscreen-media-label">-</b></div>
     <div class="row">
       <label class="field">
         Image / video (from Drive fullscreen_img)
         <select id="fullscreen-file"></select>
       </label>
       <label class="field">
-        Start
-        <input type="time" id="fullscreen-start" step="60" />
+        Start date/time
+        <input type="datetime-local" id="fullscreen-start" step="60" />
       </label>
       <label class="field">
-        End
-        <input type="time" id="fullscreen-end" step="60" />
+        End date/time
+        <input type="datetime-local" id="fullscreen-end" step="60" />
       </label>
     </div>
-    <div class="days" id="fullscreen-days" style="margin-top: 12px;">
-      <label><input type="checkbox" value="Mon" /> Mon</label>
-      <label><input type="checkbox" value="Tue" /> Tue</label>
-      <label><input type="checkbox" value="Wed" /> Wed</label>
-      <label><input type="checkbox" value="Thu" /> Thu</label>
-      <label><input type="checkbox" value="Fri" /> Fri</label>
-      <label><input type="checkbox" value="Sat" /> Sat</label>
-      <label><input type="checkbox" value="Sun" /> Sun</label>
-    </div>
     <div class="row" style="margin-top: 12px;">
-      <button id="save-fullscreen">Save Schedule</button>
+      <button id="save-fullscreen">Save Fullscreen Window</button>
+      <button id="cancel-fullscreen" class="danger">Cancel now</button>
       <span class="save-note" id="fullscreen-saved" style="display:none;">Saved</span>
     </div>
-    <div class="hint">Covers the entire wall (zones + ticker). JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black. Fullscreen always wins over webcam. Sync Drive after uploading files to <code>milpitas/fullscreen_img</code>.</div>
-  </section>
-
-  <section>
-    <h2>Webcam Override</h2>
-    <div class="row">
-      <button id="webcam-on">Force On</button>
-      <button id="webcam-off">Force Off</button>
-      <button id="webcam-auto" class="secondary">Follow Schedule</button>
-    </div>
+    <div class="hint">Overrides everything (including Manual and Regular Hours) between start and end. Both date/times and a file that exists on disk are required. Cancel now clears the window and returns to the schedule. JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black.</div>
   </section>
 
   <section>
@@ -135,6 +261,24 @@
       <button id="save-timing" style="align-self: flex-end;">Save</button>
       <span class="save-note" id="timing-saved" style="display:none;">Saved</span>
     </div>
+  </section>
+
+  <section>
+    <h2>Drive &amp; Prayer Refresh Schedule</h2>
+    <div class="status-line">Current cadence: <b id="sync-cadence">-</b></div>
+    <div class="row" style="margin: 10px 0;">
+      <label class="field">
+        Default interval (minutes)
+        <input type="number" id="sync-default-interval" min="1" step="1" />
+      </label>
+    </div>
+    <div id="sync-windows-list"></div>
+    <div class="row" style="margin-top: 8px;">
+      <button id="add-sync-window" class="secondary">Add refresh window</button>
+      <button id="save-sync-schedule">Save Refresh Schedule</button>
+      <span class="save-note" id="sync-schedule-saved" style="display:none;">Saved</span>
+    </div>
+    <div class="hint">Default: every 15 minutes Sunday 8:10am–2:00pm, every 3 hours the rest of the week (Sunday 2pm through next Sunday 8:10am). Same-day windows only. Overlapping windows are rejected. Check Now below still forces an immediate refresh.</div>
   </section>
 
   <section>
@@ -180,18 +324,25 @@
     <ul class="playlist" id="playlist-list"></ul>
   </section>
 
-  <section>
-    <h2>Webcam Schedule Windows (from wall-config.json)</h2>
-    <ul class="playlist" id="webcam-windows"></ul>
-  </section>
-
 <script>
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 async function api(path, opts) {
   const res = await fetch(`/control/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
   return res.json();
+}
+
+function flashSaved(id) {
+  const note = document.getElementById(id);
+  note.style.display = 'inline';
+  setTimeout(() => { note.style.display = 'none'; }, 2000);
+}
+
+function isEditing(root) {
+  return root.contains(document.activeElement);
 }
 
 function renderItems(el, items) {
@@ -211,24 +362,172 @@ function renderItems(el, items) {
   });
 }
 
-function renderWindows(el, windows) {
-  el.innerHTML = '';
-  (windows || []).forEach((w) => {
-    const li = document.createElement('li');
-    li.textContent = `${w.start}–${w.end}${w.days ? ' (' + w.days.join(', ') + ')' : ' (daily)'}`;
-    el.appendChild(li);
+function renderWeek(days, nowMinutes) {
+  const root = document.getElementById('week-preview');
+  root.innerHTML = '';
+  (days || []).forEach((day) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'week-day';
+    const head = document.createElement('div');
+    head.className = 'week-head';
+    const name = document.createElement('div');
+    name.className = 'week-name';
+    name.innerHTML = day.isToday
+      ? `<span class="today">${day.dayName} ${day.date} (today)</span>`
+      : `${day.dayName} ${day.date}`;
+    const summary = document.createElement('div');
+    summary.className = 'week-summary';
+    summary.textContent = day.summary || '';
+    head.appendChild(name);
+    head.appendChild(summary);
+    const barWrap = document.createElement('div');
+    barWrap.className = 'week-bar-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'week-bar';
+    (day.segments || []).forEach((seg) => {
+      const slice = document.createElement('div');
+      slice.className = `week-seg ${seg.mode}`;
+      slice.style.flex = String(Math.max(1, (seg.endMin || 0) - (seg.startMin || 0)));
+      slice.title = `${seg.label} ${seg.startMin}–${seg.endMin}`;
+      bar.appendChild(slice);
+    });
+    barWrap.appendChild(bar);
+    if (day.isToday && Number.isFinite(nowMinutes)) {
+      const pct = Math.min(100, Math.max(0, (nowMinutes / 1440) * 100));
+      const nowEl = document.createElement('div');
+      nowEl.className = 'week-now';
+      nowEl.style.left = `${pct}%`;
+      const label = document.createElement('div');
+      label.className = 'week-now-label';
+      label.textContent = 'current time';
+      if (pct < 8) label.style.transform = 'none';
+      else if (pct > 92) label.style.transform = 'translateX(-100%)';
+      else label.style.transform = 'translateX(-50%)';
+      const arrow = document.createElement('div');
+      arrow.className = 'week-now-arrow';
+      const line = document.createElement('div');
+      line.className = 'week-now-line';
+      nowEl.appendChild(label);
+      nowEl.appendChild(arrow);
+      nowEl.appendChild(line);
+      barWrap.appendChild(nowEl);
+    }
+    wrap.appendChild(head);
+    wrap.appendChild(barWrap);
+    root.appendChild(wrap);
   });
-  if (!windows || windows.length === 0) {
-    const li = document.createElement('li');
-    li.textContent = 'No windows scheduled';
-    el.appendChild(li);
-  }
+}
+
+function collectHoursWindows() {
+  return [...document.querySelectorAll('#regular-hours-list .hours-row')].map((row) => ({
+    days: [...row.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => cb.value),
+    start: row.querySelector('.hours-start').value,
+    end: row.querySelector('.hours-end').value,
+  }));
+}
+
+function addHoursRow(window) {
+  const list = document.getElementById('regular-hours-list');
+  const row = document.createElement('div');
+  row.className = 'hours-row';
+  const days = document.createElement('div');
+  days.className = 'days';
+  const selected = new Set((window && window.days) || []);
+  DAY_NAMES.forEach((d) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = d;
+    cb.checked = selected.has(d);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + d));
+    days.appendChild(label);
+  });
+  const times = document.createElement('div');
+  times.className = 'row';
+  times.style.marginTop = '8px';
+  times.innerHTML = `
+    <label class="field">Start <input type="time" class="hours-start" step="60" /></label>
+    <label class="field">End <input type="time" class="hours-end" step="60" /></label>
+  `;
+  const del = document.createElement('button');
+  del.className = 'secondary';
+  del.textContent = 'Delete';
+  del.onclick = () => row.remove();
+  times.appendChild(del);
+  row.appendChild(days);
+  row.appendChild(times);
+  list.appendChild(row);
+  row.querySelector('.hours-start').value = (window && window.start) || '09:00';
+  row.querySelector('.hours-end').value = (window && window.end) || '15:00';
+}
+
+function syncHoursForm(windows) {
+  const list = document.getElementById('regular-hours-list');
+  if (isEditing(list)) return;
+  list.innerHTML = '';
+  (windows || []).forEach((w) => addHoursRow(w));
+}
+
+function collectSyncWindows() {
+  return [...document.querySelectorAll('#sync-windows-list .hours-row')].map((row) => ({
+    days: [...row.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => cb.value),
+    start: row.querySelector('.hours-start').value,
+    end: row.querySelector('.hours-end').value,
+    intervalMinutes: Number(row.querySelector('.sync-interval').value),
+  }));
+}
+
+function addSyncWindowRow(window) {
+  const list = document.getElementById('sync-windows-list');
+  const row = document.createElement('div');
+  row.className = 'hours-row';
+  const days = document.createElement('div');
+  days.className = 'days';
+  const selected = new Set((window && window.days) || []);
+  DAY_NAMES.forEach((d) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = d;
+    cb.checked = selected.has(d);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + d));
+    days.appendChild(label);
+  });
+  const times = document.createElement('div');
+  times.className = 'row';
+  times.style.marginTop = '8px';
+  times.innerHTML = `
+    <label class="field">Start <input type="time" class="hours-start" step="60" /></label>
+    <label class="field">End <input type="time" class="hours-end" step="60" /></label>
+    <label class="field">Every (minutes) <input type="number" class="sync-interval" min="1" step="1" /></label>
+  `;
+  const del = document.createElement('button');
+  del.className = 'secondary';
+  del.textContent = 'Delete';
+  del.onclick = () => row.remove();
+  times.appendChild(del);
+  row.appendChild(days);
+  row.appendChild(times);
+  list.appendChild(row);
+  row.querySelector('.hours-start').value = (window && window.start) || '08:10';
+  row.querySelector('.hours-end').value = (window && window.end) || '14:00';
+  row.querySelector('.sync-interval').value = (window && window.intervalMinutes) || 15;
+}
+
+function syncScheduleForm(schedule) {
+  const list = document.getElementById('sync-windows-list');
+  const def = document.getElementById('sync-default-interval');
+  if (isEditing(list) || document.activeElement === def) return;
+  def.value = (schedule && schedule.defaultIntervalMinutes) || 180;
+  list.innerHTML = '';
+  ((schedule && schedule.windows) || []).forEach((w) => addSyncWindowRow(w));
 }
 
 function renderFullscreenFileOptions(files, selected) {
   const sel = document.getElementById('fullscreen-file');
-  const focused = document.activeElement === sel;
-  if (focused) return;
+  if (document.activeElement === sel) return;
 
   const current = selected || '';
   sel.innerHTML = '';
@@ -257,40 +556,75 @@ function syncFullscreenForm(data) {
   const fs = data.fullscreen || {};
   const startEl = document.getElementById('fullscreen-start');
   const endEl = document.getElementById('fullscreen-end');
-  const daysEl = document.getElementById('fullscreen-days');
   const editing =
     document.activeElement === startEl ||
     document.activeElement === endEl ||
-    daysEl.contains(document.activeElement) ||
     document.activeElement === document.getElementById('fullscreen-file');
 
   renderFullscreenFileOptions(data.fullscreenFiles, fs.file);
-
   if (editing) return;
-
-  startEl.value = fs.start || '09:00';
-  endEl.value = fs.end || '10:00';
-  const selectedDays = new Set(fs.days || []);
-  daysEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-    cb.checked = selectedDays.has(cb.value);
-  });
+  startEl.value = fs.startAt || '';
+  endEl.value = fs.endAt || '';
 }
 
 async function refresh() {
   const data = await api('/status');
-  document.getElementById('mode-value').textContent = data.mode;
+  document.getElementById('wall-clock').textContent = data.wallClock
+    ? `${data.wallClock.local} (${data.wallClock.timeZone})`
+    : '-';
+
+  const mode = (data.display && data.display.mode) || data.mode || 'off';
+  const label = (data.display && data.display.label) || mode;
+  const until = (data.display && data.display.untilLabel) || '';
+  let extra = '';
+  if (mode === 'fullscreen') {
+    extra = data.fullscreen && data.fullscreen.file
+      ? data.fullscreen.file
+      : 'image not found';
+  } else if (mode === 'manual') {
+    extra = (data.manual && data.manual.url) || 'no URL';
+  } else if (mode === 'playlist') {
+    extra = data.devShowDashboard
+      ? 'Debug override — not saved'
+      : 'Regular Hours dashboard (3 column / 4 box)';
+  } else {
+    extra = 'Solid black — outside Regular Hours';
+  }
+  const statusEl = document.getElementById('mode-status');
+  statusEl.className = `mode-status ${mode}`;
+  document.getElementById('mode-status-value').textContent = label;
+  document.getElementById('mode-status-detail').textContent = [until, extra].filter(Boolean).join(' · ');
+
+  const banner = document.getElementById('manual-banner');
+  if (data.display && data.display.manualBanner) {
+    banner.textContent = data.display.manualBanner;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  renderWeek(data.weekPreview, data.wallClock && data.wallClock.minutes);
+  syncHoursForm(data.regularHours);
+  syncScheduleForm(data.syncSchedule);
+  syncFullscreenForm(data);
+
+  document.getElementById('sync-cadence').textContent =
+    (data.syncCadence && data.syncCadence.line) || '-';
+
   document.getElementById('fullscreen-media-label').textContent =
     data.fullscreen && data.fullscreen.file
       ? `${data.fullscreen.file}${data.mode === 'fullscreen' ? ' (showing now)' : ''}`
       : '(none selected)';
 
-  document.getElementById('fullscreen-on').classList.toggle('active', data.overrides.fullscreenForce === 'on');
-  document.getElementById('fullscreen-off').classList.toggle('active', data.overrides.fullscreenForce === 'off');
-  document.getElementById('fullscreen-auto').classList.toggle('active', data.overrides.fullscreenForce == null);
+  const urlEl = document.getElementById('manual-url');
+  if (document.activeElement !== urlEl) urlEl.value = (data.manual && data.manual.url) || '';
+  document.getElementById('dev-dashboard').classList.toggle('active', !!data.devShowDashboard);
+  document.getElementById('dev-dashboard').textContent = data.devShowDashboard
+    ? 'Dev dashboard ON'
+    : 'Show Dashboard for dev';
 
-  document.getElementById('webcam-on').classList.toggle('active', data.overrides.webcamForce === 'on');
-  document.getElementById('webcam-off').classList.toggle('active', data.overrides.webcamForce === 'off');
-  document.getElementById('webcam-auto').classList.toggle('active', data.overrides.webcamForce === null);
+  document.getElementById('manual-on').classList.toggle('active', !!(data.manual && data.manual.enabled));
+  document.getElementById('manual-off').classList.toggle('active', !(data.manual && data.manual.enabled));
 
   document.getElementById('ticker-on').classList.toggle('active', data.settings.tickerEnabled === true);
   document.getElementById('ticker-off').classList.toggle('active', data.settings.tickerEnabled === false);
@@ -326,10 +660,7 @@ async function refresh() {
     : '-';
 
   renderItems(document.getElementById('playlist-list'), data.playlist);
-  renderWindows(document.getElementById('webcam-windows'), data.webcamSchedule);
-  syncFullscreenForm(data);
 
-  // Don't clobber the field while the operator is mid-edit.
   const mainInput = document.getElementById('main-slide-duration');
   const recentInput = document.getElementById('recent-round-duration');
   const eventsInput = document.getElementById('events-duration');
@@ -342,51 +673,85 @@ async function refresh() {
   if (document.activeElement !== tickerInput) tickerInput.value = data.settings.tickerSpeed;
 }
 
-async function saveFullscreenForm() {
-  const file = document.getElementById('fullscreen-file').value || null;
-  const start = document.getElementById('fullscreen-start').value;
-  const end = document.getElementById('fullscreen-end').value;
-  const days = [...document.querySelectorAll('#fullscreen-days input:checked')].map((cb) => cb.value);
-  return api('/fullscreen', {
-    method: 'POST',
-    body: JSON.stringify({ file, start, end, days }),
-  });
-}
+document.getElementById('add-hours').onclick = () => addHoursRow({ days: [], start: '09:00', end: '15:00' });
 
-document.getElementById('fullscreen-on').onclick = async () => {
-  const file = document.getElementById('fullscreen-file').value || null;
-  if (!file) {
-    alert('Select a fullscreen image/video from the list first (sync Drive if the list is empty).');
-    return;
-  }
-  // Force On does not depend on schedule start/end/days — only the file.
-  const result = await api('/fullscreen-force', {
-    method: 'POST',
-    body: JSON.stringify({ force: 'on', file }),
-  });
-  if (result.error) alert(result.error);
-  return refresh();
-};
-document.getElementById('fullscreen-off').onclick = () =>
-  api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: 'off' }) }).then(refresh);
-document.getElementById('fullscreen-auto').onclick = () =>
-  api('/fullscreen-force', { method: 'POST', body: JSON.stringify({ force: null }) }).then(refresh);
+document.getElementById('add-sync-window').onclick = () =>
+  addSyncWindowRow({ days: ['Sun'], start: '08:10', end: '14:00', intervalMinutes: 15 });
 
-document.getElementById('save-fullscreen').onclick = async () => {
-  const result = await saveFullscreenForm();
+document.getElementById('save-sync-schedule').onclick = async () => {
+  const result = await api('/sync-schedule', {
+    method: 'POST',
+    body: JSON.stringify({
+      defaultIntervalMinutes: Number(document.getElementById('sync-default-interval').value),
+      windows: collectSyncWindows(),
+    }),
+  });
   if (result.error) {
     alert(result.error);
     return;
   }
-  const note = document.getElementById('fullscreen-saved');
-  note.style.display = 'inline';
-  setTimeout(() => { note.style.display = 'none'; }, 2000);
+  flashSaved('sync-schedule-saved');
   refresh();
 };
 
-document.getElementById('webcam-on').onclick = () => api('/webcam', { method: 'POST', body: JSON.stringify({ force: 'on' }) }).then(refresh);
-document.getElementById('webcam-off').onclick = () => api('/webcam', { method: 'POST', body: JSON.stringify({ force: 'off' }) }).then(refresh);
-document.getElementById('webcam-auto').onclick = () => api('/webcam', { method: 'POST', body: JSON.stringify({ force: null }) }).then(refresh);
+document.getElementById('save-hours').onclick = async () => {
+  const result = await api('/regular-hours', {
+    method: 'POST',
+    body: JSON.stringify({ windows: collectHoursWindows() }),
+  });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  flashSaved('hours-saved');
+  refresh();
+};
+
+document.getElementById('save-fullscreen').onclick = async () => {
+  const result = await api('/fullscreen', {
+    method: 'POST',
+    body: JSON.stringify({
+      file: document.getElementById('fullscreen-file').value || null,
+      startAt: document.getElementById('fullscreen-start').value,
+      endAt: document.getElementById('fullscreen-end').value,
+    }),
+  });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  flashSaved('fullscreen-saved');
+  refresh();
+};
+
+document.getElementById('cancel-fullscreen').onclick = async () => {
+  if (!confirm('Clear the fullscreen start and end? The wall goes back to Regular Hours / Manual / black.')) return;
+  const result = await api('/fullscreen-cancel', { method: 'POST', body: '{}' });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  refresh();
+};
+
+async function setManual(enabled) {
+  const result = await api('/manual', {
+    method: 'POST',
+    body: JSON.stringify({
+      enabled,
+      url: document.getElementById('manual-url').value,
+    }),
+  });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  refresh();
+}
+
+document.getElementById('manual-on').onclick = () => setManual(true);
+document.getElementById('manual-off').onclick = () => setManual(false);
+
 document.getElementById('ticker-on').onclick = () => api('/ticker', { method: 'POST', body: JSON.stringify({ enabled: true }) }).then(refresh);
 document.getElementById('ticker-off').onclick = () => api('/ticker', { method: 'POST', body: JSON.stringify({ enabled: false }) }).then(refresh);
 document.getElementById('sync-now').onclick = async (e) => {
@@ -447,7 +812,6 @@ document.getElementById('restart-server').onclick = async (e) => {
     // and let the wait loop below decide.
   }
 
-  // Poll until the fresh process answers again.
   const deadline = Date.now() + 30000;
   let back = false;
   while (Date.now() < deadline) {
@@ -486,14 +850,29 @@ document.getElementById('save-timing').onclick = async () => {
     alert(result.error);
     return;
   }
-  const note = document.getElementById('timing-saved');
-  note.style.display = 'inline';
-  setTimeout(() => { note.style.display = 'none'; }, 2000);
+  flashSaved('timing-saved');
   refresh();
 };
 
-refresh();
-setInterval(refresh, 5000);
+document.getElementById('dev-dashboard').onclick = async () => {
+  const enabled = !document.getElementById('dev-dashboard').classList.contains('active');
+  const result = await api('/dev-dashboard', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  refresh();
+};
+
+async function boot() {
+  await api('/dev-dashboard', { method: 'POST', body: JSON.stringify({ enabled: false }) });
+  refresh();
+  setInterval(refresh, 5000);
+}
+boot();
 </script>
 </body>
 </html>

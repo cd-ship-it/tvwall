@@ -35,6 +35,7 @@ router.get('/state', (req, res) => {
     tickerSpeed: config.tickerSpeed,
     tickerEnabled: config.tickerEnabled,
     fullscreen: getFullscreenMedia(config.fullscreen),
+    manualUrl: config.manual && config.manual.enabled ? config.manual.url : null,
     skip: state.skip,
     reload: state.reload,
     sync: state.sync,

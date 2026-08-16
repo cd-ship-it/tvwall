@@ -33,16 +33,16 @@ const state = {
     counts: null, // { zh, en }
   },
 
-  // Operator overrides from /control. Null means "no override, follow
-  // the configured schedule normally."
+  // Operator overrides from /control. Hours (fullscreen / manual /
+  // regular) are persisted in wall-config.json, not here.
+  // devShowDashboard is in-memory only — /control page load clears it.
   overrides: {
-    webcamForce: null, // 'on' | 'off' | null
-    fullscreenForce: null, // 'on' | 'off' | null — fullscreen always wins when on
+    devShowDashboard: false,
   },
 
   // Current mode as last computed by the scheduler:
-  // 'fullscreen' | 'webcam' | 'playlist'.
-  mode: 'playlist',
+  // 'fullscreen' | 'manual' | 'playlist' | 'off'.
+  mode: 'off',
 
   // Bumped on every "skip to item" command from /control. The kiosk client
   // compares this against the last value it saw to detect a fresh skip

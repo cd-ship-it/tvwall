@@ -7,22 +7,23 @@ const MEDIA_DIR = path.join(__dirname, '..', '..', 'media');
 // tracked in git, not treated as Drive content.
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'wall-config.json');
 
+const {
+  DEFAULT_REGULAR_HOURS,
+  DEFAULT_MANUAL,
+  DEFAULT_FULLSCREEN,
+  DEFAULT_SYNC_SCHEDULE,
+  normalizeRegularHours,
+  normalizeManual,
+  normalizeFullscreen,
+  normalizeSyncSchedule,
+} = require('./hours');
+
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi']);
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 // Fullscreen override accepts JPG/PNG + video only (no gif/webp).
 const FULLSCREEN_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
 const IGNORED_FILES = new Set(['.gitkeep', '.ds_store', '.sync-manifest.json', 'wall-config.json']);
 const DEFAULT_SLIDE_DURATION = Number(process.env.DEFAULT_SLIDE_DURATION) || 8;
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const HH_MM_RE = /^\d{2}:\d{2}$/;
-
-const DEFAULT_FULLSCREEN = {
-  file: null, // filename inside fullscreen_img/, or null
-  start: '09:00',
-  end: '10:00',
-  days: [], // empty = never auto-scheduled; operator must pick days
-  force: null, // 'on' | 'off' | null — persisted so Force On survives restarts
-};
 
 // Flat root of the whole local media cache - holds the shared sync
 // manifest, and one subdirectory per campus underneath it.
@@ -51,8 +52,8 @@ function getRecentDir() {
 }
 
 // media/<campus>/fullscreen_img/ - full-canvas override media (Drive
-// folder of the same name under the campus). Covers the whole wall when
-// scheduled or force-shown from /control.
+// folder of the same name under the campus). Covers the whole wall during
+// a one-shot start/end datetime from /control.
 function getFullscreenDir() {
   return path.join(getCampusDir(), 'fullscreen_img');
 }
@@ -66,11 +67,13 @@ function getPrayersCachePath() {
   return path.join(getCampusDir(), 'prayers-cache.json');
 }
 
-// Scans a zone directory into { file, type, duration? } entries, same
-// recognized-extension rules everywhere. `imageDuration` (seconds) is
-// applied to every image found - videos ignore it and always play their
-// natural length.
-function scanMediaDir(dir, imageDuration) {
+// Scans a zone directory (and any nested folders the Drive mirror created)
+// into { file, type, duration? } entries. `file` is relative to `dir` so
+// nested items stay addressable as e.g. "camp/01.jpg". `imageDuration`
+// (seconds) is applied to every image found - videos ignore it and always
+// play their natural length. `imageExts` lets fullscreen restrict to
+// JPG/PNG while featured/recent keep the wider image set.
+function scanMediaDir(dir, imageDuration, relBase = '', imageExts = IMAGE_EXTENSIONS) {
   let entries = [];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -78,18 +81,27 @@ function scanMediaDir(dir, imageDuration) {
     return [];
   }
 
-  return entries
-    .filter((e) => e.isFile())
-    .map((e) => e.name)
-    .filter((name) => !name.startsWith('.') && !IGNORED_FILES.has(name.toLowerCase()))
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => {
-      const ext = path.extname(name).toLowerCase();
-      if (VIDEO_EXTENSIONS.has(ext)) return { file: name, type: 'video' };
-      if (IMAGE_EXTENSIONS.has(ext)) return { file: name, type: 'image', duration: imageDuration };
-      return null; // unrecognized file type, e.g. stray non-media upload - skip
-    })
-    .filter(Boolean);
+  const items = [];
+  for (const entry of entries) {
+    const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      items.push(...scanMediaDir(path.join(dir, entry.name), imageDuration, rel, imageExts));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (entry.name.startsWith('.') || IGNORED_FILES.has(entry.name.toLowerCase())) continue;
+    if (entry.name.toLowerCase().endsWith('.part')) continue;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (VIDEO_EXTENSIONS.has(ext)) {
+      items.push({ file: rel, type: 'video' });
+    } else if (imageExts.has(ext)) {
+      const item = { file: rel, type: 'image' };
+      if (imageDuration != null) item.duration = imageDuration;
+      items.push(item);
+    }
+  }
+  items.sort((a, b) => a.file.localeCompare(b.file));
+  return items;
 }
 
 // events.json dropped directly in the campus directory root by driveSync
@@ -255,76 +267,46 @@ const DEFAULT_SETTINGS = {
   prayersDuration: 10, // Prayers zone, per bullet item
   tickerSpeed: 30, // news ticker, pixels per second
   tickerEnabled: true, // news ticker on/off, from /control
+  regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
+  manual: { ...DEFAULT_MANUAL },
   fullscreen: { ...DEFAULT_FULLSCREEN },
+  syncSchedule: {
+    defaultIntervalMinutes: DEFAULT_SYNC_SCHEDULE.defaultIntervalMinutes,
+    windows: DEFAULT_SYNC_SCHEDULE.windows.map((w) => ({
+      days: [...w.days],
+      start: w.start,
+      end: w.end,
+      intervalMinutes: w.intervalMinutes,
+    })),
+  },
 };
 
-// JPG/PNG + video entries from fullscreen_img/. Used by /control's picker
-// and by the kiosk when mode is fullscreen.
+// JPG/PNG + video entries from fullscreen_img/ (including nested folders
+// the Drive mirror created). Used by /control's picker and by the kiosk
+// when mode is fullscreen.
 function getFullscreenFiles() {
-  let entries = [];
-  try {
-    entries = fs.readdirSync(getFullscreenDir(), { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  return entries
-    .filter((e) => e.isFile())
-    .map((e) => e.name)
-    .filter((name) => !name.startsWith('.') && !IGNORED_FILES.has(name.toLowerCase()))
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => {
-      const ext = path.extname(name).toLowerCase();
-      if (VIDEO_EXTENSIONS.has(ext)) return { file: name, type: 'video' };
-      if (FULLSCREEN_IMAGE_EXTENSIONS.has(ext)) return { file: name, type: 'image' };
-      return null;
-    })
-    .filter(Boolean);
+  return scanMediaDir(getFullscreenDir(), null, '', FULLSCREEN_IMAGE_EXTENSIONS);
 }
 
-function normalizeFullscreen(raw) {
-  if (!raw || typeof raw !== 'object') return { ...DEFAULT_FULLSCREEN };
-  const days = Array.isArray(raw.days)
-    ? raw.days.filter((d) => DAY_NAMES.includes(d))
-    : [];
-  const start = normalizeClock(raw.start) || DEFAULT_FULLSCREEN.start;
-  const end = normalizeClock(raw.end) || DEFAULT_FULLSCREEN.end;
-  const file = typeof raw.file === 'string' && raw.file.trim() ? raw.file.trim() : null;
-  const force = [null, 'on', 'off'].includes(raw.force) ? raw.force : null;
-  return { file, start, end, days, force };
-}
-
-// Accept "HH:MM" or "HH:MM:SS" from <input type="time">; store HH:MM.
-function normalizeClock(value) {
-  if (typeof value !== 'string') return null;
-  const m = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-}
-
-function parseTimeToMinutes(hhmm) {
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + m;
-}
-
-// Webcam schedule windows and per-zone slide durations can't be inferred
-// from a folder of files, so they're still hand-curated - via a small,
-// git-tracked config file local to each machine, editable by hand or
-// through /control (both just read/write this same file). Featured content
-// itself stays fully automatic from the Drive sync - only its timing is
-// configurable here. Zone content (Upcoming, Recent) is template-based,
-// not config-based - each zone reads its own Drive/local data directly.
+// Per-zone slide durations and wall hours live in a small, git-tracked
+// config file local to each machine, editable by hand or through /control.
+// Featured content itself stays fully automatic from the Drive sync - only
+// its timing is configurable here. Zone content (Upcoming, Recent) is
+// template-based, not config-based - each zone reads its own Drive/local
+// data directly.
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    return { webcamSchedule: [], ...DEFAULT_SETTINGS, fullscreen: { ...DEFAULT_FULLSCREEN } };
+    return {
+      ...DEFAULT_SETTINGS,
+      regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
+      manual: { ...DEFAULT_MANUAL },
+      fullscreen: { ...DEFAULT_FULLSCREEN },
+      syncSchedule: normalizeSyncSchedule(undefined),
+    };
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     return {
-      webcamSchedule: Array.isArray(parsed.webcamSchedule) ? parsed.webcamSchedule : [],
       mainSlideDuration: Number(parsed.mainSlideDuration) > 0 ? Number(parsed.mainSlideDuration) : DEFAULT_SETTINGS.mainSlideDuration,
       recentRoundDuration:
         Number(parsed.recentRoundDuration) > 0 ? Number(parsed.recentRoundDuration) : DEFAULT_SETTINGS.recentRoundDuration,
@@ -332,12 +314,21 @@ function loadConfig() {
       prayersDuration: Number(parsed.prayersDuration) > 0 ? Number(parsed.prayersDuration) : DEFAULT_SETTINGS.prayersDuration,
       tickerSpeed: Number(parsed.tickerSpeed) > 0 ? Number(parsed.tickerSpeed) : DEFAULT_SETTINGS.tickerSpeed,
       tickerEnabled: typeof parsed.tickerEnabled === 'boolean' ? parsed.tickerEnabled : DEFAULT_SETTINGS.tickerEnabled,
+      regularHours: normalizeRegularHours(parsed.regularHours),
+      manual: normalizeManual(parsed.manual),
       fullscreen: normalizeFullscreen(parsed.fullscreen),
+      syncSchedule: normalizeSyncSchedule(parsed.syncSchedule),
     };
   } catch {
     // Malformed config shouldn't take down the Featured playlist - fall
     // back to defaults until it's fixed.
-    return { webcamSchedule: [], ...DEFAULT_SETTINGS, fullscreen: { ...DEFAULT_FULLSCREEN } };
+    return {
+      ...DEFAULT_SETTINGS,
+      regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
+      manual: { ...DEFAULT_MANUAL },
+      fullscreen: { ...DEFAULT_FULLSCREEN },
+      syncSchedule: normalizeSyncSchedule(undefined),
+    };
   }
 }
 
@@ -366,43 +357,7 @@ function getPlaylist() {
   const config = loadConfig();
   return {
     playlist: scanMediaDir(getFeaturedDir(), config.mainSlideDuration),
-    webcamSchedule: config.webcamSchedule,
   };
-}
-
-// window: { start: "HH:MM", end: "HH:MM", days?: ["Sun", ...] }
-// Same-day windows only (end assumed later than start on the same day).
-function isWithinWindow(window, now = new Date()) {
-  if (window.days && window.days.length > 0) {
-    const today = DAY_NAMES[now.getDay()];
-    if (!window.days.includes(today)) return false;
-  }
-
-  const [startH, startM] = window.start.split(':').map(Number);
-  const [endH, endM] = window.end.split(':').map(Number);
-  const startMinutes = startH * 60 + startM;
-  const endMinutes = endH * 60 + endM;
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
-  return nowMinutes >= startMinutes && nowMinutes < endMinutes;
-}
-
-function isWebcamScheduled(webcamSchedule, now = new Date()) {
-  return webcamSchedule.some((w) => isWithinWindow(w, now));
-}
-
-// Fullscreen auto-schedule: needs a selected file, at least one day, and
-// a same-day window (end strictly after start). Uses the wall machine's
-// local clock, same as webcam windows.
-function isFullscreenScheduled(fullscreen, now = new Date()) {
-  if (!fullscreen || !fullscreen.file) return false;
-  if (!Array.isArray(fullscreen.days) || fullscreen.days.length === 0) return false;
-  if (!HH_MM_RE.test(fullscreen.start) || !HH_MM_RE.test(fullscreen.end)) return false;
-  if (parseTimeToMinutes(fullscreen.end) <= parseTimeToMinutes(fullscreen.start)) return false;
-  return isWithinWindow(
-    { start: fullscreen.start, end: fullscreen.end, days: fullscreen.days },
-    now
-  );
 }
 
 // Resolve the currently configured fullscreen media item (or null if the
@@ -430,11 +385,4 @@ module.exports = {
   getPrayerSlides,
   loadConfig,
   updateSettings,
-  isWebcamScheduled,
-  isFullscreenScheduled,
-  isWithinWindow,
-  DAY_NAMES,
-  HH_MM_RE,
-  normalizeClock,
-  parseTimeToMinutes,
 };
