@@ -1,2 +1,2 @@
-cd ./depoly/kiosk/
+cd ./deploy/kiosk
 ./restart.sh
