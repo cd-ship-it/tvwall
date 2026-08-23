@@ -261,6 +261,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// events.json sometimes serializes missing fields as the string "null" /
+// "None" rather than JSON null. Treat those as absent so they never show.
+function hasEventText(value) {
+  if (value == null) return false;
+  const text = String(value).trim();
+  if (!text) return false;
+  return !/^(null|undefined|none)$/i.test(text);
+}
+
 // Chinese weekly-prayer bullets come prefixed "1. ", "2. ", etc. from the
 // source page. Strip that so the slide is just the sentence.
 function stripLeadingBulletNumber(text) {
@@ -277,10 +286,12 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ("every Tuesday") / free-text. Date ranges and `dates` arrays use the
 // start / first entry.
 function eventStartIso(event) {
-  if (event.date && ISO_DATE_RE.test(event.date)) return event.date;
-  if (event.date_range && ISO_DATE_RE.test(event.date_range.start)) return event.date_range.start;
+  if (hasEventText(event.date) && ISO_DATE_RE.test(event.date)) return event.date;
+  if (event.date_range && hasEventText(event.date_range.start) && ISO_DATE_RE.test(event.date_range.start)) {
+    return event.date_range.start;
+  }
   if (Array.isArray(event.dates)) {
-    const first = event.dates.find((d) => ISO_DATE_RE.test(d));
+    const first = event.dates.find((d) => hasEventText(d) && ISO_DATE_RE.test(d));
     if (first) return first;
   }
   return null;
@@ -296,8 +307,9 @@ function formatMonthDay(iso) {
 }
 
 function formatShortDate(iso) {
+  if (!hasEventText(iso)) return '';
   const d = new Date(`${iso}T00:00:00`);
-  if (isNaN(d.getTime())) return iso;
+  if (isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
@@ -306,18 +318,28 @@ function formatShortDate(iso) {
 // stay in the square only. Then time, then location+address.
 function eventDetailLines(event) {
   const dateBits = [];
-  if (event.date && !ISO_DATE_RE.test(event.date)) dateBits.push(event.date);
-  if (event.date_range && event.date_range.start && event.date_range.end) {
-    dateBits.push(`${formatShortDate(event.date_range.start)} – ${formatShortDate(event.date_range.end)}`);
-  } else if (Array.isArray(event.dates) && event.dates.length > 1) {
-    dateBits.push(
-      `${formatShortDate(event.dates[0])} – ${formatShortDate(event.dates[event.dates.length - 1])} (${event.dates.length} sessions)`
-    );
+  if (hasEventText(event.date) && !ISO_DATE_RE.test(event.date)) dateBits.push(event.date);
+  let usedRange = false;
+  if (event.date_range) {
+    const start = formatShortDate(event.date_range.start);
+    const end = formatShortDate(event.date_range.end);
+    if (start && end) dateBits.push(`${start} – ${end}`);
+    else if (start) dateBits.push(start);
+    else if (end) dateBits.push(end);
+    usedRange = Boolean(start || end);
   }
-  if (event.recurrence) dateBits.push(event.recurrence);
+  if (!usedRange && Array.isArray(event.dates)) {
+    const dates = event.dates.filter(hasEventText);
+    if (dates.length > 1) {
+      dateBits.push(
+        `${formatShortDate(dates[0])} – ${formatShortDate(dates[dates.length - 1])} (${dates.length} sessions)`
+      );
+    }
+  }
+  if (hasEventText(event.recurrence)) dateBits.push(event.recurrence);
 
-  const place = [event.location, event.address].filter(Boolean).join(' — ');
-  return [dateBits.filter(Boolean).join(' · '), event.time, place].filter(Boolean);
+  const place = [event.location, event.address].filter(hasEventText).join(' — ');
+  return [dateBits.join(' · '), hasEventText(event.time) ? event.time : '', place].filter(hasEventText);
 }
 
 function renderEventMeta(event) {
@@ -339,19 +361,24 @@ function renderEventMeta(event) {
 
 function renderEventCard(event) {
   const parts = [];
-  parts.push(`<div class="event-title-en">${escapeHtml(event.title_en || event.title_zh || 'Upcoming Event')}</div>`);
-  if (event.title_zh && event.title_en) {
-    parts.push(`<div class="event-title-zh">${escapeHtml(event.title_zh)}</div>`);
+  const titleEn = hasEventText(event.title_en) ? event.title_en : '';
+  const titleZh = hasEventText(event.title_zh) ? event.title_zh : '';
+  parts.push(`<div class="event-title-en">${escapeHtml(titleEn || titleZh || 'Upcoming Event')}</div>`);
+  if (titleZh && titleEn) {
+    parts.push(`<div class="event-title-zh">${escapeHtml(titleZh)}</div>`);
   }
 
   parts.push(renderEventMeta(event));
 
   const extras = [];
-  if (event.doors_open) extras.push(`Doors open ${event.doors_open}`);
-  if (event.cost) extras.push(event.cost);
-  if (event.special_guest) extras.push(`Special guest: ${event.special_guest}`);
-  if (Array.isArray(event.speakers) && event.speakers.length) extras.push(`Speakers: ${event.speakers.join(', ')}`);
-  if (event.notes) extras.push(event.notes);
+  if (hasEventText(event.doors_open)) extras.push(`Doors open ${event.doors_open}`);
+  if (hasEventText(event.cost)) extras.push(event.cost);
+  if (hasEventText(event.special_guest)) extras.push(`Special guest: ${event.special_guest}`);
+  if (Array.isArray(event.speakers)) {
+    const speakers = event.speakers.filter(hasEventText);
+    if (speakers.length) extras.push(`Speakers: ${speakers.join(', ')}`);
+  }
+  if (hasEventText(event.notes)) extras.push(event.notes);
   if (extras.length) parts.push(`<div class="event-notes">${escapeHtml(extras.join(' · '))}</div>`);
 
   return parts.join('');
