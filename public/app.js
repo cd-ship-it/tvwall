@@ -680,7 +680,7 @@ const newsTicker = new NewsTicker(
 );
 newsTicker.start();
 
-// ---- Full-canvas covers (fullscreen one-shot / Manual URL / off-hours) ----
+// ---- Full-canvas covers (fullscreen weekly window / Manual URL / off-hours) ----
 const fullscreenOverlay = document.getElementById('fullscreen-overlay');
 const fullscreenVideoEl = document.getElementById('fullscreen-video');
 const fullscreenImageEl = document.getElementById('fullscreen-image');

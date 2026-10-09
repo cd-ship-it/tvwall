@@ -203,28 +203,33 @@
   </section>
 
   <section>
-    <h2>Fullscreen Image (one-shot)</h2>
+    <h2>Fullscreen Video / Image (weekly)</h2>
     <div class="status-line">Selected file: <b id="fullscreen-media-label">-</b></div>
-    <div class="row">
-      <label class="field">
-        Image / video (from Drive fullscreen_img)
-        <select id="fullscreen-file"></select>
-      </label>
-      <label class="field">
-        Start date/time
-        <input type="datetime-local" id="fullscreen-start" step="60" />
-      </label>
-      <label class="field">
-        End date/time
-        <input type="datetime-local" id="fullscreen-end" step="60" />
-      </label>
+    <div id="fullscreen-form">
+      <div class="row">
+        <label class="field">
+          Image / video (from Drive fullscreen_img)
+          <select id="fullscreen-file"></select>
+        </label>
+      </div>
+      <div class="days" id="fullscreen-days" style="margin-top: 10px;"></div>
+      <div class="row" style="margin-top: 8px;">
+        <label class="field">
+          Start time
+          <input type="time" id="fullscreen-start" step="60" />
+        </label>
+        <label class="field">
+          End time
+          <input type="time" id="fullscreen-end" step="60" />
+        </label>
+      </div>
     </div>
     <div class="row" style="margin-top: 12px;">
       <button id="save-fullscreen">Save Fullscreen Window</button>
-      <button id="cancel-fullscreen" class="danger">Cancel now</button>
+      <button id="cancel-fullscreen" class="danger">Clear schedule</button>
       <span class="save-note" id="fullscreen-saved" style="display:none;">Saved</span>
     </div>
-    <div class="hint">Overrides everything (including Manual and Regular Hours) between start and end. Both date/times and a file that exists on disk are required. Cancel now clears the window and returns to the schedule. JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black.</div>
+    <div class="hint">Overrides everything (including Manual and Regular Hours) on the selected days between start and end. Videos loop indefinitely until end time, then the wall returns to the default view. Same-day windows only (no overnight). File must exist in Drive <code>fullscreen_img</code>. JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black.</div>
   </section>
 
   <section>
@@ -527,9 +532,9 @@ function syncScheduleForm(schedule) {
 
 function renderFullscreenFileOptions(files, selected) {
   const sel = document.getElementById('fullscreen-file');
-  if (document.activeElement === sel) return;
-
-  const current = selected || '';
+  // Prefer the in-progress pick in the DOM so a status poll doesn't wipe
+  // an unsaved selection when focus has moved to days/times.
+  const current = sel.value || selected || '';
   sel.innerHTML = '';
   const none = document.createElement('option');
   none.value = '';
@@ -552,19 +557,36 @@ function renderFullscreenFileOptions(files, selected) {
   }
 }
 
-function syncFullscreenForm(data) {
-  const fs = data.fullscreen || {};
-  const startEl = document.getElementById('fullscreen-start');
-  const endEl = document.getElementById('fullscreen-end');
-  const editing =
-    document.activeElement === startEl ||
-    document.activeElement === endEl ||
-    document.activeElement === document.getElementById('fullscreen-file');
+function renderFullscreenDays(selectedDays) {
+  const root = document.getElementById('fullscreen-days');
+  const selected = new Set(selectedDays || []);
+  root.innerHTML = '';
+  DAY_NAMES.forEach((d) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = d;
+    cb.checked = selected.has(d);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + d));
+    root.appendChild(label);
+  });
+}
 
+function collectFullscreenDays() {
+  return [...document.querySelectorAll('#fullscreen-days input[type="checkbox"]:checked')].map((cb) => cb.value);
+}
+
+function syncFullscreenForm(data) {
+  // Don't clobber unsaved file/days/times while focus is in those controls.
+  // Save/Clear sit outside #fullscreen-form so post-save refresh still applies.
+  if (isEditing(document.getElementById('fullscreen-form'))) return;
+
+  const fs = data.fullscreen || {};
   renderFullscreenFileOptions(data.fullscreenFiles, fs.file);
-  if (editing) return;
-  startEl.value = fs.startAt || '';
-  endEl.value = fs.endAt || '';
+  renderFullscreenDays(fs.days);
+  document.getElementById('fullscreen-start').value = fs.start || '';
+  document.getElementById('fullscreen-end').value = fs.end || '';
 }
 
 async function refresh() {
@@ -611,10 +633,17 @@ async function refresh() {
   document.getElementById('sync-cadence').textContent =
     (data.syncCadence && data.syncCadence.line) || '-';
 
-  document.getElementById('fullscreen-media-label').textContent =
-    data.fullscreen && data.fullscreen.file
-      ? `${data.fullscreen.file}${data.mode === 'fullscreen' ? ' (showing now)' : ''}`
-      : '(none selected)';
+  {
+    const fs = data.fullscreen || {};
+    let label = '(none selected)';
+    if (fs.file) {
+      const days = (fs.days && fs.days.length) ? fs.days.join('/') : 'no days';
+      const window = fs.start && fs.end ? `${fs.start}–${fs.end}` : 'no times';
+      const live = data.mode === 'fullscreen' ? ' · showing now' : '';
+      label = `${fs.file} · ${days} ${window}${live}`;
+    }
+    document.getElementById('fullscreen-media-label').textContent = label;
+  }
 
   const urlEl = document.getElementById('manual-url');
   if (document.activeElement !== urlEl) urlEl.value = (data.manual && data.manual.url) || '';
@@ -712,8 +741,9 @@ document.getElementById('save-fullscreen').onclick = async () => {
     method: 'POST',
     body: JSON.stringify({
       file: document.getElementById('fullscreen-file').value || null,
-      startAt: document.getElementById('fullscreen-start').value,
-      endAt: document.getElementById('fullscreen-end').value,
+      days: collectFullscreenDays(),
+      start: document.getElementById('fullscreen-start').value,
+      end: document.getElementById('fullscreen-end').value,
     }),
   });
   if (result.error) {
@@ -725,7 +755,7 @@ document.getElementById('save-fullscreen').onclick = async () => {
 };
 
 document.getElementById('cancel-fullscreen').onclick = async () => {
-  if (!confirm('Clear the fullscreen start and end? The wall goes back to Regular Hours / Manual / black.')) return;
+  if (!confirm('Clear the fullscreen schedule? The wall goes back to Regular Hours / Manual / black.')) return;
   const result = await api('/fullscreen-cancel', { method: 'POST', body: '{}' });
   if (result.error) {
     alert(result.error);

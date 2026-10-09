@@ -1,5 +1,5 @@
 // Wall hours: every minute maps to exactly one mode.
-// Priority: fullscreen one-shot → Manual URL → Regular Hours dashboard → black.
+// Priority: fullscreen weekly window → Manual URL → Regular Hours dashboard → black.
 // All times are the wall machine's local clock (the box that runs the dashboard).
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -8,14 +8,14 @@ const LOCAL_DT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 const DEFAULT_REGULAR_HOURS = [{ days: ['Sun'], start: '09:00', end: '15:00' }];
 const DEFAULT_MANUAL = { enabled: false, url: '' };
-const DEFAULT_FULLSCREEN = { file: null, startAt: null, endAt: null };
+const DEFAULT_FULLSCREEN = { file: null, days: [], start: null, end: null };
 const DEFAULT_SYNC_SCHEDULE = {
   defaultIntervalMinutes: 180,
   windows: [{ days: ['Sun'], start: '08:10', end: '14:00', intervalMinutes: 15 }],
 };
 
 const MODE_LABELS = {
-  fullscreen: 'Fullscreen image',
+  fullscreen: 'Fullscreen media',
   manual: 'Manual URL',
   playlist: 'Dashboard',
   off: 'Black screen',
@@ -117,12 +117,14 @@ function normalizeManual(raw) {
 function normalizeFullscreen(raw) {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_FULLSCREEN };
   const file = typeof raw.file === 'string' && raw.file.trim() ? raw.file.trim() : null;
-  const start = parseLocalDateTime(raw.startAt);
-  const end = parseLocalDateTime(raw.endAt);
+  const days = Array.isArray(raw.days) ? raw.days.filter((d) => DAY_NAMES.includes(d)) : [];
+  const start = normalizeClock(raw.start);
+  const end = normalizeClock(raw.end);
   return {
     file,
-    startAt: start ? formatLocalDateTime(start) : null,
-    endAt: end ? formatLocalDateTime(end) : null,
+    days: [...new Set(days)],
+    start,
+    end,
   };
 }
 
@@ -144,11 +146,8 @@ function isRegularHours(windows, now = new Date()) {
 }
 
 function isFullscreenActive(fullscreen, now = new Date()) {
-  if (!fullscreen || !fullscreen.startAt || !fullscreen.endAt) return false;
-  const start = parseLocalDateTime(fullscreen.startAt);
-  const end = parseLocalDateTime(fullscreen.endAt);
-  if (!start || !end || end <= start) return false;
-  return now >= start && now < end;
+  if (!fullscreen || !fullscreen.file) return false;
+  return isWithinWindow(fullscreen, now);
 }
 
 function computeMode(config, now = new Date()) {
@@ -345,31 +344,49 @@ function describeSyncCadence(schedule, now = new Date()) {
   };
 }
 
-function validateFullscreen({ file, startAt, endAt }, availableNames) {
-  if (typeof file !== 'string' || !file.trim()) return { error: 'Select a fullscreen image' };
+function validateFullscreen({ file, days, start, end }, availableNames) {
+  if (typeof file !== 'string' || !file.trim()) return { error: 'Select a fullscreen image or video' };
   if (!availableNames.has(file)) return { error: 'file must exist in fullscreen_img' };
-  const start = parseLocalDateTime(startAt);
-  const end = parseLocalDateTime(endAt);
-  if (!start) return { error: 'start date/time is required' };
-  if (!end) return { error: 'end date/time is required' };
-  if (end <= start) return { error: 'end must be after start' };
+  const startClock = normalizeClock(start);
+  const endClock = normalizeClock(end);
+  if (!startClock || !endClock) return { error: 'start and end must be HH:MM' };
+  if (parseTimeToMinutes(endClock) <= parseTimeToMinutes(startClock)) {
+    return { error: 'end must be after start (no overnight)' };
+  }
+  if (!Array.isArray(days) || days.length === 0) return { error: 'pick at least one day' };
+  if (days.some((d) => !DAY_NAMES.includes(d))) {
+    return { error: `days must be ${DAY_NAMES.join(', ')}` };
+  }
   return {
     ok: true,
     fullscreen: {
       file: file.trim(),
-      startAt: formatLocalDateTime(start),
-      endAt: formatLocalDateTime(end),
+      days: [...new Set(days)],
+      start: startClock,
+      end: endClock,
     },
   };
 }
 
-function upcomingFullscreenRange(fullscreen, now) {
-  if (!fullscreen || !fullscreen.startAt || !fullscreen.endAt) return null;
-  const start = parseLocalDateTime(fullscreen.startAt);
-  const end = parseLocalDateTime(fullscreen.endAt);
-  if (!start || !end || end <= start) return null;
-  if (now >= end) return null;
-  return { start, end };
+function endOfCurrentFullscreenWindow(fullscreen, now) {
+  if (!isFullscreenActive(fullscreen, now)) return null;
+  const [h, m] = fullscreen.end.split(':').map(Number);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+}
+
+function nextFullscreenStart(fullscreen, now) {
+  if (!fullscreen || !fullscreen.file || !fullscreen.start || !fullscreen.end) return null;
+  if (!Array.isArray(fullscreen.days) || fullscreen.days.length === 0) return null;
+  let best = null;
+  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+    const dayName = DAY_NAMES[day.getDay()];
+    if (!fullscreen.days.includes(dayName)) continue;
+    const [h, m] = fullscreen.start.split(':').map(Number);
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0);
+    if (start > now && (!best || start < best)) best = start;
+  }
+  return best;
 }
 
 function endOfCurrentRegularWindow(windows, now) {
@@ -398,13 +415,14 @@ function nextRegularHoursStart(windows, now) {
 
 function nextTransitionAt(config, now = new Date()) {
   const mode = computeMode(config, now);
-  const fs = upcomingFullscreenRange(config.fullscreen, now);
   const candidates = [];
 
-  if (mode === 'fullscreen' && fs) {
-    candidates.push(fs.end);
+  if (mode === 'fullscreen') {
+    const end = endOfCurrentFullscreenWindow(config.fullscreen, now);
+    if (end) candidates.push(end);
   } else {
-    if (fs && fs.start > now) candidates.push(fs.start);
+    const nextFs = nextFullscreenStart(config.fullscreen, now);
+    if (nextFs) candidates.push(nextFs);
     if (mode === 'playlist') {
       const end = endOfCurrentRegularWindow(config.regularHours, now);
       if (end) candidates.push(end);

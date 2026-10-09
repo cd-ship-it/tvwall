@@ -53,7 +53,7 @@ function getRecentDir() {
 
 // media/<campus>/fullscreen_img/ - full-canvas override media (Drive
 // folder of the same name under the campus). Covers the whole wall during
-// a one-shot start/end datetime from /control.
+// a weekly day/time window from /control; videos loop until the window ends.
 function getFullscreenDir() {
   return path.join(getCampusDir(), 'fullscreen_img');
 }

@@ -187,7 +187,8 @@ router.post('/api/manual', express.json(), (req, res) => {
   });
 });
 
-// One-shot fullscreen window. File must exist on disk; both datetimes required.
+// Weekly fullscreen window. File must exist on disk; days + start/end required.
+// Videos loop for the whole window; when it ends the wall returns to default.
 router.post('/api/fullscreen', express.json(), (req, res) => {
   const availableNames = new Set(getFullscreenFiles().map((f) => f.file));
   const result = validateFullscreen(req.body, availableNames);
@@ -195,10 +196,7 @@ router.post('/api/fullscreen', express.json(), (req, res) => {
     return res.status(400).json({ error: result.error });
   }
   const config = updateSettings({
-    fullscreen: {
-      ...loadConfig().fullscreen,
-      ...result.fullscreen,
-    },
+    fullscreen: result.fullscreen,
   });
   state.mode = computeMode();
   res.json({
@@ -210,14 +208,15 @@ router.post('/api/fullscreen', express.json(), (req, res) => {
   });
 });
 
-// Wipe the one-shot window; Regular Hours / Manual / black take over immediately.
+// Clear the weekly window; Regular Hours / Manual / black take over immediately.
 router.post('/api/fullscreen-cancel', express.json(), (req, res) => {
   const current = loadConfig().fullscreen;
   const config = updateSettings({
     fullscreen: {
-      ...current,
-      startAt: null,
-      endAt: null,
+      file: current.file || null,
+      days: [],
+      start: null,
+      end: null,
     },
   });
   state.mode = computeMode();
