@@ -66,7 +66,10 @@
       <div class="news-ticker-track" id="news-ticker-track"></div>
     </div>
 
-    <!-- Full-canvas covers: fullscreen weekly window, Manual URL, or off-hours black. -->
+    <!-- Full-canvas covers: countdown, fullscreen weekly window, Manual URL, or off-hours black. -->
+    <div class="fullscreen-overlay" id="countdown-overlay" aria-hidden="true">
+      <iframe id="countdown-frame" title="Countdown clock"></iframe>
+    </div>
     <div class="fullscreen-overlay" id="fullscreen-overlay" aria-hidden="true">
       <video id="fullscreen-video" class="fit-contain" playsinline muted loop></video>
       <img id="fullscreen-image" class="fit-contain" alt="" />
@@ -79,6 +82,6 @@
     </div>
     <div class="fullscreen-overlay" id="off-overlay" aria-hidden="true"></div>
   </div>
-  <script src="app.js?v=hours3"></script>
+  <script src="app.js?v=countdown1"></script>
 </body>
 </html>

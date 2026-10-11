@@ -680,7 +680,9 @@ const newsTicker = new NewsTicker(
 );
 newsTicker.start();
 
-// ---- Full-canvas covers (fullscreen weekly window / Manual URL / off-hours) ----
+// ---- Full-canvas covers (countdown / fullscreen / Manual URL / off-hours) ----
+const countdownOverlay = document.getElementById('countdown-overlay');
+const countdownFrameEl = document.getElementById('countdown-frame');
 const fullscreenOverlay = document.getElementById('fullscreen-overlay');
 const fullscreenVideoEl = document.getElementById('fullscreen-video');
 const fullscreenImageEl = document.getElementById('fullscreen-image');
@@ -690,6 +692,7 @@ const manualImageEl = document.getElementById('manual-image');
 const manualFrameEl = document.getElementById('manual-frame');
 const manualMissingEl = document.getElementById('manual-missing');
 const offOverlay = document.getElementById('off-overlay');
+let countdownSrc = null;
 let fullscreenActive = false;
 let fullscreenSrc = null;
 let manualSrc = null;
@@ -710,6 +713,28 @@ function showCover(el) {
 function hideCover(el) {
   el.classList.remove('visible');
   el.setAttribute('aria-hidden', 'true');
+}
+
+function showCountdown(url) {
+  showCover(countdownOverlay);
+  if (!url) {
+    countdownFrameEl.classList.remove('visible');
+    countdownFrameEl.removeAttribute('src');
+    countdownSrc = null;
+    return;
+  }
+  if (url === countdownSrc) return;
+  countdownSrc = url;
+  countdownFrameEl.src = url;
+  countdownFrameEl.classList.add('visible');
+}
+
+function hideCountdown() {
+  if (!countdownOverlay.classList.contains('visible') && !countdownSrc) return;
+  hideCover(countdownOverlay);
+  countdownFrameEl.classList.remove('visible');
+  countdownFrameEl.removeAttribute('src');
+  countdownSrc = null;
 }
 
 function showFullscreenMedia(item, syncStamp) {
@@ -938,25 +963,36 @@ async function pollState() {
     eventsPlayer.setEvents(data.events, data.eventsDuration);
     prayersPlayer.setData(data.prayersSlides, data.prayersDuration, data.prayersComingSoon);
 
-    if (data.mode === 'fullscreen') {
+    if (data.mode === 'countdown') {
+      hideFullscreenMedia();
+      hideManualOverlay();
+      hideOffOverlay();
+      showCountdown(data.countdown && data.countdown.url);
+      stopWebcamMode();
+      newsTicker.setEnabled(false);
+    } else if (data.mode === 'fullscreen') {
+      hideCountdown();
       hideManualOverlay();
       hideOffOverlay();
       showFullscreenMedia(data.fullscreen, data.sync && data.sync.lastSyncAt);
       stopWebcamMode();
       newsTicker.setEnabled(false);
     } else if (data.mode === 'manual') {
+      hideCountdown();
       hideFullscreenMedia();
       hideOffOverlay();
       showManualUrl(data.manualUrl);
       stopWebcamMode();
       newsTicker.setEnabled(false);
     } else if (data.mode === 'off') {
+      hideCountdown();
       hideFullscreenMedia();
       hideManualOverlay();
       showOffOverlay();
       stopWebcamMode();
       newsTicker.setEnabled(false);
     } else {
+      hideCountdown();
       hideFullscreenMedia();
       hideManualOverlay();
       hideOffOverlay();

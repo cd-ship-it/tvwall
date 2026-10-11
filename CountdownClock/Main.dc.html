@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>崇拜倒數</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&amp;family=Noto+Sans+TC:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#070a11}
+a{color:#ffffff}a:hover{color:#e6c46a}
+@keyframes flipTopA{0%{transform:rotateX(0deg);filter:brightness(1)}100%{transform:rotateX(-90deg);filter:brightness(0.6)}}
+@keyframes flipTopB{0%{transform:rotateX(0deg);filter:brightness(1)}100%{transform:rotateX(-90deg);filter:brightness(0.6)}}
+@keyframes flipBotA{0%{transform:rotateX(90deg);filter:brightness(0.75)}100%{transform:rotateX(0deg);filter:brightness(1)}}
+@keyframes flipBotB{0%{transform:rotateX(90deg);filter:brightness(0.75)}100%{transform:rotateX(0deg);filter:brightness(1)}}
+.flapbtn:focus-visible{outline:4px solid #e6c46a;outline-offset:8px}
+</style>
+</helmet>
+<div style="position: relative; width: 2880px; height: 1080px; overflow: hidden; background: radial-gradient(ellipse 120% 90% at 30% 20%, #0d111b 0%, #070a11 60%, #04060b 100%); font-family: 'Noto Sans TC', sans-serif; color: #ffffff">
+
+<svg aria-hidden="true" width="2880" height="1080" viewBox="0 0 2880 1080" style="position: absolute; left: 0; top: 0">
+<defs>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#c9a24a" stop-opacity="0"></stop>
+<stop offset="0.45" stop-color="#c9a24a" stop-opacity="0.55"></stop>
+<stop offset="1" stop-color="#e8c873" stop-opacity="1"></stop>
+</linearGradient>
+<linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#06182f" stop-opacity="0"></stop>
+<stop offset="1" stop-color="#062046" stop-opacity="0.95"></stop>
+</linearGradient>
+</defs>
+<path d="M0 1080 L0 1030 Q1300 1010 2880 900 L2880 1080 Z" fill="url(#navy)"></path>
+<path d="M1100 1000 Q2100 975 2880 895" fill="none" stroke="url(#gold)" stroke-width="6"></path>
+<path d="M1500 1012 Q2300 985 2880 935" fill="none" stroke="url(#gold)" stroke-width="2" opacity="0.5"></path>
+</svg>
+<img src="./assets/25f48fbdc3c168658dfa9080c4de56f6.svg" alt="Crosspoint Church 匯點華人基督教會" style="position: absolute; left: 116px; top: 52px; width: 660px; height: 260px; object-fit: contain">
+
+
+<div style="position: absolute; left: 170px; top: 322px; width: 600px; height: 600px; border-radius: 50%; background: linear-gradient(145deg, #f2f2f2 0%, #a9a9a9 45%, #e2e2e2 70%, #8c8c8c 100%); box-shadow: 0 24px 60px rgba(0,0,0,0.55)" role="img" aria-label="太平洋時間 {{timeLabel}}">
+<div style="position: absolute; left: 22px; top: 22px; width: 556px; height: 556px; border-radius: 50%; background: #ffffff; overflow: hidden; box-shadow: inset 0 0 0 2px #cfcfcf, inset 0 8px 20px rgba(0,0,0,0.15)">
+<sc-for list="{{ticks}}" as="t" hint-placeholder-count="60">
+<div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{t.deg}}deg)">
+<div style="position: absolute; left: 50%; top: 14px; width: {{t.w}}px; height: {{t.h}}px; margin-left: {{t.ml}}px; background: #111111"></div>
+</div>
+</sc-for>
+<div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{hourDeg}}deg); filter: drop-shadow(0 4px 4px rgba(0,0,0,0.25))">
+<div style="position: absolute; left: 267px; top: 118px; width: 22px; height: 200px; background: #111111"></div>
+</div>
+<div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{minDeg}}deg); filter: drop-shadow(0 6px 5px rgba(0,0,0,0.25))">
+<div style="position: absolute; left: 270px; top: 34px; width: 16px; height: 284px; background: #111111"></div>
+</div>
+<div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{secDeg}}deg); filter: drop-shadow(0 6px 5px rgba(0,0,0,0.22))">
+<div style="position: absolute; left: 276px; top: 30px; width: 4px; height: 318px; background: #c8372d; border-radius: 2px"></div>
+<div style="position: absolute; left: 262px; top: 330px; width: 32px; height: 32px; border-radius: 50%; border: 5px solid #c8372d; box-sizing: border-box; background: #ffffff"></div>
+</div>
+<div style="position: absolute; left: 270px; top: 270px; width: 16px; height: 16px; border-radius: 50%; background: #c8372d"></div>
+</div>
+</div>
+
+<div style="position: absolute; left: 807px; top: 339px; width: 1241px; height: 588px; background: #000000">
+<button class="flapbtn" type="button" onClick="{{restart}}" aria-label="重新開始倒數" style="width: 100%; height: 100%; background: none; border: 0; padding: 32px 75px; margin: 0; box-sizing: border-box; cursor: pointer; color: inherit; font: inherit; display: flex; flex-direction: row; align-items: center; gap: 129px">
+<sc-for list="{{cards}}" as="d" hint-placeholder-count="2">
+<div style="position: relative; width: 446px; height: 524px; flex-shrink: 0; perspective: 2200px">
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 261px; overflow: hidden; border-radius: 24px 24px 0 0; background: #ffffff">
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 524px; line-height: 524px; text-align: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 300px; letter-spacing: -0.02em; color: #000000">{{d.cur}}</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 263px; height: 261px; overflow: hidden; border-radius: 0 0 24px 24px; background: #f1f1f1">
+<div style="position: absolute; left: 0; right: 0; top: -263px; height: 524px; line-height: 524px; text-align: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 300px; letter-spacing: -0.02em; color: #000000">{{d.prev}}</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 261px; overflow: hidden; border-radius: 24px 24px 0 0; background: #ffffff; transform-origin: 50% 262px; backface-visibility: hidden; z-index: 2; animation: flipTop{{d.k}} 280ms ease-in both">
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 524px; line-height: 524px; text-align: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 300px; letter-spacing: -0.02em; color: #000000">{{d.prev}}</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 263px; height: 261px; overflow: hidden; border-radius: 0 0 24px 24px; background: #f1f1f1; transform-origin: 50% -1px; backface-visibility: hidden; z-index: 3; animation: flipBot{{d.k}} 280ms ease-out 280ms both">
+<div style="position: absolute; left: 0; right: 0; top: -263px; height: 524px; line-height: 524px; text-align: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 300px; letter-spacing: -0.02em; color: #000000">{{d.cur}}</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 260px; height: 4px; background: #4a4a4a; z-index: 4"></div>
+<div style="position: absolute; left: -10px; top: 232px; width: 36px; height: 60px; border-radius: 4px; background: #444444; z-index: 5"></div>
+<div style="position: absolute; right: -10px; top: 232px; width: 36px; height: 60px; border-radius: 4px; background: #444444; z-index: 5"></div>
+</div>
+</sc-for>
+</button>
+</div>
+
+<div style="position: absolute; left: 2034px; top: 505px; width: 790px; display: flex; flex-direction: column; gap: 6px">
+<sc-if value="{{showChinese}}" hint-placeholder-val="{{ true }}">
+<div style="font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size: 80px; line-height: 1.3; letter-spacing: 0.04em; color: #ffffff">{{zhLine1}}</div>
+<div style="font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size: 80px; line-height: 1.3; letter-spacing: 0.04em; color: #ffffff">{{zhLine2}}</div>
+</sc-if>
+<sc-if value="{{showEnglish}}" hint-placeholder-val="{{ false }}">
+<div style="font-family: 'Noto Sans TC', sans-serif; font-weight: 500; font-size: 60px; line-height: 1.25; color: #ffffff; margin-bottom: 18px">{{enLine1}}</div>
+<div style="font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size: 52px; line-height: 1.3; color: #ffffff">{{enLine2}}</div>
+</sc-if>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"minutes":{"editor":"int","default":5,"min":1,"max":99,"section":"Countdown"},"switchTime":{"editor":"text","default":"10:55","section":"Language switch (Pacific, 24-hour HH:MM)"},"language":{"editor":"enum","default":"auto","options":["auto","chinese","english"],"section":"Language switch (Pacific, 24-hour HH:MM)"},"zhLine1":{"editor":"text","default":"崇拜即將開始","section":"Chinese text"},"zhLine2":{"editor":"text","default":"請進禮堂安心靜候神","section":"Chinese text"},"enLine1":{"editor":"text","default":"Worship is about to begin.","section":"English text"},"enLine2":{"editor":"text","default":"Please enter the hall and quiet your heart before God.","section":"English text"},"$preview":{"width":2880,"height":1080}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.restart();
+    this.timer = setInterval(() => this.tick(), 40);
+  }
+  componentWillUnmount() {
+    clearInterval(this.timer);
+  }
+  componentDidUpdate(prevProps) {
+    if (prevProps && prevProps.minutes !== this.props.minutes) this.restart();
+  }
+  mins() {
+    let m = Number(this.props.minutes ?? 5);
+    try {
+      const q = new URLSearchParams(location.search).get('minutes');
+      if (q != null && q !== '') m = Number(q);
+    } catch {}
+    return m >= 1 && m <= 99 ? Math.floor(m) : 5;
+  }
+  fmt(ms) {
+    const t = Math.max(0, Math.ceil(ms / 1000));
+    return [String(Math.floor(t / 60)), String(t % 60).padStart(2, '0')];
+  }
+  restart() {
+    this.end = Date.now() + this.mins() * 60000;
+    this.tick();
+  }
+  tick() {
+    const now = Date.now();
+    const vals = this.fmt((this.end || now + this.mins() * 60000) - now);
+    const old = this.state && this.state.cards;
+    let cards;
+    if (!old) {
+      cards = vals.map((c) => ({ cur: c, prev: c, k: 'A' }));
+    } else {
+      cards = old.map((c, i) => (vals[i] === c.cur ? c : { cur: vals[i], prev: c.cur, k: c.k === 'A' ? 'B' : 'A' }));
+    }
+    this.setState({ now, cards });
+  }
+  pacific(now) {
+    if (!this._fmt) {
+      this._fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' });
+    }
+    const p = {};
+    this._fmt.formatToParts(new Date(now)).forEach((x) => { p[x.type] = x.value; });
+    return { h: Number(p.hour) % 24, m: Number(p.minute), s: Number(p.second) };
+  }
+  faceParts() {
+    if (!this._face) {
+      const ticks = [];
+      for (let i = 0; i < 60; i++) {
+        const major = i % 5 === 0;
+        const w = major ? 12 : 5;
+        ticks.push({ deg: i * 6, w, h: major ? 46 : 16, ml: -w / 2 });
+      }
+      const numerals = [];
+      const c = 278, r = 192;
+      for (let n = 1; n <= 12; n++) {
+        const a = (n * 30 * Math.PI) / 180;
+        numerals.push({ label: String(n), x: Math.round(c + r * Math.sin(a)), y: Math.round(c - r * Math.cos(a)) });
+      }
+      this._face = { ticks, numerals };
+    }
+    return this._face;
+  }
+  renderVals() {
+    const st = this.state || {};
+    const now = st.now || Date.now();
+    const t = this.pacific(now);
+    const sec = t.s + (now % 1000) / 1000;
+    const face = this.faceParts();
+    let cards = st.cards;
+    if (!cards) {
+      cards = this.fmt(this.mins() * 60000).map((c) => ({ cur: c, prev: c, k: 'A' }));
+    }
+    const hh = t.h % 12 === 0 ? 12 : t.h % 12;
+    // ===== Text settings: edit defaults here or in the Tweaks panel =====
+    const SWITCH_TIME = this.props.switchTime ?? '10:55';
+    const ZH_LINE_1 = this.props.zhLine1 ?? '崇拜即將開始';
+    const ZH_LINE_2 = this.props.zhLine2 ?? '請進禮堂安心靜候神';
+    const EN_LINE_1 = this.props.enLine1 ?? 'Worship is about to begin.';
+    const EN_LINE_2 = this.props.enLine2 ?? 'Please enter the hall and quiet your heart before God.';
+    // ====================================================================
+    const sw = String(SWITCH_TIME).trim().match(/^(\d{1,2}):(\d{2})$/);
+    const switchMin = sw ? Number(sw[1]) * 60 + Number(sw[2]) : 10 * 60 + 55;
+    const lang = this.props.language ?? 'auto';
+    const english = lang === 'english' || (lang === 'auto' && t.h * 60 + t.m >= switchMin);
+    return {
+      showChinese: !english,
+      showEnglish: english,
+      zhLine1: ZH_LINE_1,
+      zhLine2: ZH_LINE_2,
+      enLine1: EN_LINE_1,
+      enLine2: EN_LINE_2,
+      ticks: face.ticks,
+      numerals: face.numerals,
+      secDeg: (sec * 6).toFixed(2),
+      minDeg: ((t.m + sec / 60) * 6).toFixed(2),
+      hourDeg: (((t.h % 12) + t.m / 60) * 30).toFixed(2),
+      timeLabel: hh + ':' + String(t.m).padStart(2, '0'),
+      cards: cards,
+      restart: () => this.restart()
+    };
+  }
+}
+</script>
+</body>
+</html>

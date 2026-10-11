@@ -61,6 +61,7 @@
   }
   .mode-status.playlist { border-color: #2a4; background: #122418; }
   .mode-status.off { border-color: #444; background: #141414; }
+  .mode-status.countdown { border-color: #c9a24a; background: #1a1608; }
   .mode-status.fullscreen { border-color: #c90; background: #2a2208; }
   .mode-status.manual { border-color: #36a; background: #121828; }
   .mode-status-kicker {
@@ -78,6 +79,7 @@
   }
   .mode-status.off .mode-status-value { color: #ccc; }
   .mode-status.playlist .mode-status-value { color: #8d8; }
+  .mode-status.countdown .mode-status-value { color: #e6c46a; }
   .mode-status.fullscreen .mode-status-value { color: #fc6; }
   .mode-status.manual .mode-status-value { color: #8bf; }
   .mode-status-detail { font-size: 14px; color: #bbb; margin-top: 6px; }
@@ -89,6 +91,7 @@
   .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .swatch.off { background: #2a2a2a; }
   .swatch.playlist { background: #2a4; }
+  .swatch.countdown { background: #c9a24a; }
   .swatch.fullscreen { background: #c90; }
   .swatch.manual { background: #36a; }
   .week-day { margin: 8px 0; }
@@ -101,6 +104,7 @@
   .week-seg { height: 100%; }
   .week-seg.off { background: #2a2a2a; }
   .week-seg.playlist { background: #2a4; }
+  .week-seg.countdown { background: #c9a24a; }
   .week-seg.fullscreen { background: #c90; }
   .week-seg.manual { background: #36a; }
   .week-now {
@@ -175,7 +179,7 @@
         <input type="url" id="manual-url" placeholder="https://example.com/wall.jpg" />
       </label>
     </div>
-    <div class="hint">Rare override. Stays on until you hit Manual Off. Image URLs fill the wall; other URLs load as a webpage. Some sites (e.g. intel.com) block embedding and will stay blank — use a direct image URL or a page that allows embedding. Fullscreen still wins if its window is active.</div>
+    <div class="hint">Rare override. Stays on until you hit Manual Off. Image URLs fill the wall; other URLs load as a webpage. Some sites (e.g. intel.com) block embedding and will stay blank — use a direct image URL or a page that allows embedding. Countdown and Fullscreen still win if their windows are active.</div>
   </section>
 
   <section>
@@ -183,12 +187,13 @@
     <div class="legend">
       <span><i class="swatch playlist"></i>Dashboard</span>
       <span><i class="swatch off"></i>Black</span>
+      <span><i class="swatch countdown"></i>Countdown</span>
       <span><i class="swatch fullscreen"></i>Fullscreen</span>
       <span><i class="swatch manual"></i>Manual URL</span>
     </div>
     <div id="week-preview"></div>
     <div class="week-ticks"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>12am</span></div>
-    <div class="hint">Every minute is one of these four. Clock is this machine (the box that runs the dashboard).</div>
+    <div class="hint">Every minute is one of these five. Priority: Countdown → Fullscreen → Manual → Dashboard → Black. Clock is this machine (the box that runs the dashboard).</div>
   </section>
 
   <section>
@@ -199,7 +204,27 @@
       <button id="save-hours">Save Regular Hours</button>
       <span class="save-note" id="hours-saved" style="display:none;">Saved</span>
     </div>
-    <div class="hint">Default is Sunday 9:00am–3:00pm. Same-day windows only (no overnight). Overlapping windows are rejected. Empty list = black except Fullscreen / Manual.</div>
+    <div class="hint">Default is Sunday 9:00am–3:00pm. Same-day windows only (no overnight). Overlapping windows are rejected. Empty list = black except Countdown / Fullscreen / Manual.</div>
+  </section>
+
+  <section>
+    <h2>Countdown Clock (highest priority)</h2>
+    <div class="status-line">Schedule: <b id="countdown-label">-</b></div>
+    <div class="row" style="margin: 10px 0;">
+      <button id="countdown-on">Countdown On</button>
+      <button id="countdown-off" class="secondary">Countdown Off</button>
+      <label class="field">
+        Length (minutes)
+        <input type="number" id="countdown-minutes" min="1" max="99" step="1" />
+      </label>
+    </div>
+    <div id="countdown-windows-list"></div>
+    <div class="row" style="margin-top: 8px;">
+      <button id="add-countdown" class="secondary">Add start time</button>
+      <button id="save-countdown">Save Countdown Schedule</button>
+      <span class="save-note" id="countdown-saved" style="display:none;">Saved</span>
+    </div>
+    <div class="hint">Default: Sunday 9:25am and 10:55am, five minutes each, then back to Dashboard / Fullscreen / Manual / black. Highest priority — overrides Fullscreen and Manual while a window is active. Same-day windows only; overlapping starts are rejected.</div>
   </section>
 
   <section>
@@ -229,7 +254,7 @@
       <button id="cancel-fullscreen" class="danger">Clear schedule</button>
       <span class="save-note" id="fullscreen-saved" style="display:none;">Saved</span>
     </div>
-    <div class="hint">Overrides everything (including Manual and Regular Hours) on the selected days between start and end. Videos loop indefinitely until end time, then the wall returns to the default view. Same-day windows only (no overnight). File must exist in Drive <code>fullscreen_img</code>. JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black.</div>
+    <div class="hint">Overrides Manual and Regular Hours on the selected days between start and end (Countdown still wins if its window is active). Videos loop indefinitely until end time, then the wall returns to the default view. Same-day windows only (no overnight). File must exist in Drive <code>fullscreen_img</code>. JPG/PNG/video expected at 2880×1080; otherwise letterboxed on black.</div>
   </section>
 
   <section>
@@ -589,6 +614,76 @@ function syncFullscreenForm(data) {
   document.getElementById('fullscreen-end').value = fs.end || '';
 }
 
+function collectCountdownWindows() {
+  return [...document.querySelectorAll('#countdown-windows-list .hours-row')].map((row) => ({
+    days: [...row.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => cb.value),
+    start: row.querySelector('.hours-start').value,
+  }));
+}
+
+function addCountdownRow(window) {
+  const list = document.getElementById('countdown-windows-list');
+  const row = document.createElement('div');
+  row.className = 'hours-row';
+  const days = document.createElement('div');
+  days.className = 'days';
+  const selected = new Set((window && window.days) || []);
+  DAY_NAMES.forEach((d) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = d;
+    cb.checked = selected.has(d);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + d));
+    days.appendChild(label);
+  });
+  const times = document.createElement('div');
+  times.className = 'row';
+  times.style.marginTop = '8px';
+  times.innerHTML = `
+    <label class="field">Start time <input type="time" class="hours-start" step="60" /></label>
+  `;
+  const del = document.createElement('button');
+  del.className = 'secondary';
+  del.textContent = 'Delete';
+  del.onclick = () => row.remove();
+  times.appendChild(del);
+  row.appendChild(days);
+  row.appendChild(times);
+  list.appendChild(row);
+  row.querySelector('.hours-start').value = (window && window.start) || '09:25';
+}
+
+function syncCountdownForm(countdown) {
+  const list = document.getElementById('countdown-windows-list');
+  const mins = document.getElementById('countdown-minutes');
+  if (isEditing(list) || document.activeElement === mins) return;
+  mins.value = (countdown && countdown.minutes) || 5;
+  list.innerHTML = '';
+  ((countdown && countdown.windows) || []).forEach((w) => addCountdownRow(w));
+}
+
+async function saveCountdown(enabledOverride) {
+  const enabled = typeof enabledOverride === 'boolean'
+    ? enabledOverride
+    : document.getElementById('countdown-on').classList.contains('active');
+  const result = await api('/countdown', {
+    method: 'POST',
+    body: JSON.stringify({
+      enabled,
+      minutes: Number(document.getElementById('countdown-minutes').value),
+      windows: collectCountdownWindows(),
+    }),
+  });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  flashSaved('countdown-saved');
+  refresh();
+}
+
 async function refresh() {
   const data = await api('/status');
   document.getElementById('wall-clock').textContent = data.wallClock
@@ -599,7 +694,10 @@ async function refresh() {
   const label = (data.display && data.display.label) || mode;
   const until = (data.display && data.display.untilLabel) || '';
   let extra = '';
-  if (mode === 'fullscreen') {
+  if (mode === 'countdown') {
+    const cd = data.countdown || {};
+    extra = `${cd.minutes || 5} min countdown`;
+  } else if (mode === 'fullscreen') {
     extra = data.fullscreen && data.fullscreen.file
       ? data.fullscreen.file
       : 'image not found';
@@ -628,10 +726,28 @@ async function refresh() {
   renderWeek(data.weekPreview, data.wallClock && data.wallClock.minutes);
   syncHoursForm(data.regularHours);
   syncScheduleForm(data.syncSchedule);
+  syncCountdownForm(data.countdown);
   syncFullscreenForm(data);
 
   document.getElementById('sync-cadence').textContent =
     (data.syncCadence && data.syncCadence.line) || '-';
+
+  {
+    const cd = data.countdown || {};
+    const on = cd.enabled !== false;
+    document.getElementById('countdown-on').classList.toggle('active', on);
+    document.getElementById('countdown-off').classList.toggle('active', !on);
+    const slots = (cd.windows || [])
+      .map((w) => {
+        const days = (w.days && w.days.length) ? w.days.join('/') : '?';
+        return `${days} ${w.start || '?'}`;
+      })
+      .join(' · ');
+    const live = data.mode === 'countdown' ? ' · showing now' : '';
+    document.getElementById('countdown-label').textContent = on
+      ? `${slots || '(no start times)'} · ${cd.minutes || 5} min${live}`
+      : `Off${slots ? ` (saved: ${slots})` : ''}`;
+  }
 
   {
     const fs = data.fullscreen || {};
@@ -703,6 +819,13 @@ async function refresh() {
 }
 
 document.getElementById('add-hours').onclick = () => addHoursRow({ days: [], start: '09:00', end: '15:00' });
+
+document.getElementById('add-countdown').onclick = () =>
+  addCountdownRow({ days: ['Sun'], start: '09:25' });
+
+document.getElementById('save-countdown').onclick = () => saveCountdown();
+document.getElementById('countdown-on').onclick = () => saveCountdown(true);
+document.getElementById('countdown-off').onclick = () => saveCountdown(false);
 
 document.getElementById('add-sync-window').onclick = () =>
   addSyncWindowRow({ days: ['Sun'], start: '08:10', end: '14:00', intervalMinutes: 15 });

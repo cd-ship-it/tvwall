@@ -44,6 +44,10 @@ app.get('/assets/wall-background.jpg', (req, res) => {
   });
 });
 
+// Worship countdown design (2880×1080). Shown fullscreen during scheduled
+// windows from /control (highest priority over fullscreen / manual / dashboard).
+app.use('/countdown', express.static(path.join(__dirname, '..', 'CountdownClock')));
+
 // Kiosk display + dev tools (test pattern, six-panel simulator).
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

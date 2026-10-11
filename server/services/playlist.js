@@ -11,10 +11,12 @@ const {
   DEFAULT_REGULAR_HOURS,
   DEFAULT_MANUAL,
   DEFAULT_FULLSCREEN,
+  DEFAULT_COUNTDOWN,
   DEFAULT_SYNC_SCHEDULE,
   normalizeRegularHours,
   normalizeManual,
   normalizeFullscreen,
+  normalizeCountdown,
   normalizeSyncSchedule,
 } = require('./hours');
 
@@ -270,6 +272,11 @@ const DEFAULT_SETTINGS = {
   regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
   manual: { ...DEFAULT_MANUAL },
   fullscreen: { ...DEFAULT_FULLSCREEN },
+  countdown: {
+    enabled: DEFAULT_COUNTDOWN.enabled,
+    minutes: DEFAULT_COUNTDOWN.minutes,
+    windows: DEFAULT_COUNTDOWN.windows.map((w) => ({ days: [...w.days], start: w.start })),
+  },
   syncSchedule: {
     defaultIntervalMinutes: DEFAULT_SYNC_SCHEDULE.defaultIntervalMinutes,
     windows: DEFAULT_SYNC_SCHEDULE.windows.map((w) => ({
@@ -301,6 +308,7 @@ function loadConfig() {
       regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
       manual: { ...DEFAULT_MANUAL },
       fullscreen: { ...DEFAULT_FULLSCREEN },
+      countdown: normalizeCountdown(undefined),
       syncSchedule: normalizeSyncSchedule(undefined),
     };
   }
@@ -317,6 +325,7 @@ function loadConfig() {
       regularHours: normalizeRegularHours(parsed.regularHours),
       manual: normalizeManual(parsed.manual),
       fullscreen: normalizeFullscreen(parsed.fullscreen),
+      countdown: normalizeCountdown(parsed.countdown),
       syncSchedule: normalizeSyncSchedule(parsed.syncSchedule),
     };
   } catch {
@@ -327,6 +336,7 @@ function loadConfig() {
       regularHours: DEFAULT_REGULAR_HOURS.map((w) => ({ days: [...w.days], start: w.start, end: w.end })),
       manual: { ...DEFAULT_MANUAL },
       fullscreen: { ...DEFAULT_FULLSCREEN },
+      countdown: normalizeCountdown(undefined),
       syncSchedule: normalizeSyncSchedule(undefined),
     };
   }

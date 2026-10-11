@@ -10,6 +10,7 @@ const {
   validateRegularHours,
   validateManual,
   validateFullscreen,
+  validateCountdown,
   validateSyncSchedule,
   describeNow,
   describeSyncCadence,
@@ -56,6 +57,7 @@ router.get('/api/status', (req, res) => {
     playlist: playlist.playlist,
     fullscreenFiles: getFullscreenFiles(),
     fullscreen: config.fullscreen,
+    countdown: config.countdown,
     regularHours: config.regularHours,
     manual: config.manual,
     syncSchedule: config.syncSchedule,
@@ -223,6 +225,24 @@ router.post('/api/fullscreen-cancel', express.json(), (req, res) => {
   res.json({
     ok: true,
     fullscreen: config.fullscreen,
+    mode: state.mode,
+    display: describeNow(config),
+    weekPreview: weekPreview(config),
+  });
+});
+
+// Worship countdown schedule (highest priority). Windows are start times;
+// each runs for `minutes`, then the wall returns to the next lower mode.
+router.post('/api/countdown', express.json(), (req, res) => {
+  const result = validateCountdown(req.body);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+  const config = updateSettings({ countdown: result.countdown });
+  state.mode = computeMode();
+  res.json({
+    ok: true,
+    countdown: config.countdown,
     mode: state.mode,
     display: describeNow(config),
     weekPreview: weekPreview(config),

@@ -1,5 +1,6 @@
 // Wall hours: every minute maps to exactly one mode.
-// Priority: fullscreen weekly window → Manual URL → Regular Hours dashboard → black.
+// Priority (highest first): countdown → fullscreen weekly window → Manual URL
+// → Regular Hours dashboard → black.
 // All times are the wall machine's local clock (the box that runs the dashboard).
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -9,12 +10,23 @@ const LOCAL_DT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 const DEFAULT_REGULAR_HOURS = [{ days: ['Sun'], start: '09:00', end: '15:00' }];
 const DEFAULT_MANUAL = { enabled: false, url: '' };
 const DEFAULT_FULLSCREEN = { file: null, days: [], start: null, end: null };
+// Highest-priority cover: worship countdown page (CountdownClock/). Defaults
+// match Sunday Chinese service (9:25) and English service (10:55), five minutes each.
+const DEFAULT_COUNTDOWN = {
+  enabled: true,
+  minutes: 5,
+  windows: [
+    { days: ['Sun'], start: '09:25' },
+    { days: ['Sun'], start: '10:55' },
+  ],
+};
 const DEFAULT_SYNC_SCHEDULE = {
   defaultIntervalMinutes: 180,
   windows: [{ days: ['Sun'], start: '08:10', end: '14:00', intervalMinutes: 15 }],
 };
 
 const MODE_LABELS = {
+  countdown: 'Countdown clock',
   fullscreen: 'Fullscreen media',
   manual: 'Manual URL',
   playlist: 'Dashboard',
@@ -128,6 +140,61 @@ function normalizeFullscreen(raw) {
   };
 }
 
+function cloneCountdownWindow(w) {
+  return { days: [...w.days], start: w.start };
+}
+
+function countdownMinutes(rawMinutes) {
+  const n = positiveInt(rawMinutes);
+  if (!n || n > 99) return DEFAULT_COUNTDOWN.minutes;
+  return n;
+}
+
+function normalizeCountdown(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {
+      enabled: DEFAULT_COUNTDOWN.enabled,
+      minutes: DEFAULT_COUNTDOWN.minutes,
+      windows: DEFAULT_COUNTDOWN.windows.map(cloneCountdownWindow),
+    };
+  }
+  const minutes = countdownMinutes(raw.minutes);
+  const windows = Array.isArray(raw.windows)
+    ? raw.windows
+        .map((w) => ({
+          days: Array.isArray(w.days) ? w.days.filter((d) => DAY_NAMES.includes(d)) : [],
+          start: normalizeClock(w && w.start),
+        }))
+        .filter((w) => w.start && w.days.length > 0)
+    : DEFAULT_COUNTDOWN.windows.map(cloneCountdownWindow);
+  return {
+    enabled: raw.enabled !== false,
+    minutes,
+    windows,
+  };
+}
+
+function endClockFromStart(start, minutes) {
+  const endMin = parseTimeToMinutes(start) + minutes;
+  if (endMin > 1440) return null;
+  const h = Math.floor(endMin / 60);
+  const m = endMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function countdownActiveWindows(countdown, now = new Date()) {
+  if (!countdown || countdown.enabled === false) return [];
+  const minutes = countdownMinutes(countdown.minutes);
+  const active = [];
+  for (const slot of countdown.windows || []) {
+    const end = endClockFromStart(slot.start, minutes);
+    if (!end) continue;
+    const window = { days: slot.days, start: slot.start, end };
+    if (isWithinWindow(window, now)) active.push(window);
+  }
+  return active;
+}
+
 function isWithinWindow(window, now = new Date()) {
   if (!window || !window.start || !window.end) return false;
   if (!Array.isArray(window.days) || window.days.length === 0) return false;
@@ -150,7 +217,12 @@ function isFullscreenActive(fullscreen, now = new Date()) {
   return isWithinWindow(fullscreen, now);
 }
 
+function isCountdownActive(countdown, now = new Date()) {
+  return countdownActiveWindows(countdown, now).length > 0;
+}
+
 function computeMode(config, now = new Date()) {
+  if (isCountdownActive(config && config.countdown, now)) return 'countdown';
   if (isFullscreenActive(config && config.fullscreen, now)) return 'fullscreen';
   if (config && config.manual && config.manual.enabled) return 'manual';
   if (isRegularHours(config && config.regularHours, now)) return 'playlist';
@@ -368,6 +440,45 @@ function validateFullscreen({ file, days, start, end }, availableNames) {
   };
 }
 
+function validateCountdown({ enabled, minutes, windows }) {
+  if (typeof enabled !== 'boolean') return { error: 'enabled must be true or false' };
+  const mins = positiveInt(minutes);
+  if (!mins || mins > 99) return { error: 'countdown length must be 1–99 minutes' };
+  if (!Array.isArray(windows)) return { error: 'windows must be an array' };
+  const normalized = [];
+  for (let i = 0; i < windows.length; i++) {
+    const w = windows[i] || {};
+    const start = normalizeClock(w.start);
+    if (!start) return { error: `window ${i + 1}: start must be HH:MM` };
+    if (!endClockFromStart(start, mins)) {
+      return { error: `window ${i + 1}: start + ${mins}m would cross midnight` };
+    }
+    if (!Array.isArray(w.days) || w.days.length === 0) {
+      return { error: `window ${i + 1}: pick at least one day` };
+    }
+    if (w.days.some((d) => !DAY_NAMES.includes(d))) {
+      return { error: `window ${i + 1}: days must be ${DAY_NAMES.join(', ')}` };
+    }
+    normalized.push({ days: [...new Set(w.days)], start });
+  }
+  const expanded = normalized.map((w) => ({
+    days: w.days,
+    start: w.start,
+    end: endClockFromStart(w.start, mins),
+  }));
+  for (let i = 0; i < expanded.length; i++) {
+    for (let j = i + 1; j < expanded.length; j++) {
+      if (windowsOverlap(expanded[i], expanded[j])) {
+        return { error: `windows ${i + 1} and ${j + 1} overlap` };
+      }
+    }
+  }
+  return {
+    ok: true,
+    countdown: { enabled, minutes: mins, windows: normalized },
+  };
+}
+
 function endOfCurrentFullscreenWindow(fullscreen, now) {
   if (!isFullscreenActive(fullscreen, now)) return null;
   const [h, m] = fullscreen.end.split(':').map(Number);
@@ -385,6 +496,36 @@ function nextFullscreenStart(fullscreen, now) {
     const [h, m] = fullscreen.start.split(':').map(Number);
     const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0);
     if (start > now && (!best || start < best)) best = start;
+  }
+  return best;
+}
+
+function endOfCurrentCountdownWindow(countdown, now) {
+  const active = countdownActiveWindows(countdown, now);
+  if (active.length === 0) return null;
+  let best = null;
+  for (const w of active) {
+    const [h, m] = w.end.split(':').map(Number);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+    if (!best || end < best) best = end;
+  }
+  return best;
+}
+
+function nextCountdownStart(countdown, now) {
+  if (!countdown || countdown.enabled === false) return null;
+  const windows = countdown.windows || [];
+  if (windows.length === 0) return null;
+  let best = null;
+  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+    const dayName = DAY_NAMES[day.getDay()];
+    for (const w of windows) {
+      if (!w.days || !w.days.includes(dayName) || !w.start) continue;
+      const [h, m] = w.start.split(':').map(Number);
+      const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0);
+      if (start > now && (!best || start < best)) best = start;
+    }
   }
   return best;
 }
@@ -417,18 +558,25 @@ function nextTransitionAt(config, now = new Date()) {
   const mode = computeMode(config, now);
   const candidates = [];
 
-  if (mode === 'fullscreen') {
-    const end = endOfCurrentFullscreenWindow(config.fullscreen, now);
+  if (mode === 'countdown') {
+    const end = endOfCurrentCountdownWindow(config.countdown, now);
     if (end) candidates.push(end);
   } else {
-    const nextFs = nextFullscreenStart(config.fullscreen, now);
-    if (nextFs) candidates.push(nextFs);
-    if (mode === 'playlist') {
-      const end = endOfCurrentRegularWindow(config.regularHours, now);
+    const nextCd = nextCountdownStart(config.countdown, now);
+    if (nextCd) candidates.push(nextCd);
+    if (mode === 'fullscreen') {
+      const end = endOfCurrentFullscreenWindow(config.fullscreen, now);
       if (end) candidates.push(end);
-    } else if (mode === 'off') {
-      const next = nextRegularHoursStart(config.regularHours, now);
-      if (next) candidates.push(next);
+    } else {
+      const nextFs = nextFullscreenStart(config.fullscreen, now);
+      if (nextFs) candidates.push(nextFs);
+      if (mode === 'playlist') {
+        const end = endOfCurrentRegularWindow(config.regularHours, now);
+        if (end) candidates.push(end);
+      } else if (mode === 'off') {
+        const next = nextRegularHoursStart(config.regularHours, now);
+        if (next) candidates.push(next);
+      }
     }
   }
 
@@ -466,7 +614,7 @@ function describeNow(config, now = new Date()) {
     showingLine: `Wall is showing ${MODE_LABELS[mode] || mode} ${untilLabel}`,
     manualOn: !!(config.manual && config.manual.enabled),
     manualBanner: config.manual && config.manual.enabled
-      ? 'Manual URL is on — Regular Hours are ignored until you turn it off. Fullscreen still wins if its window is active.'
+      ? 'Manual URL is on — Regular Hours are ignored until you turn it off. Countdown and Fullscreen still win if their windows are active.'
       : null,
   };
 }
@@ -545,6 +693,7 @@ module.exports = {
   DEFAULT_REGULAR_HOURS,
   DEFAULT_MANUAL,
   DEFAULT_FULLSCREEN,
+  DEFAULT_COUNTDOWN,
   DEFAULT_SYNC_SCHEDULE,
   normalizeClock,
   parseTimeToMinutes,
@@ -553,15 +702,18 @@ module.exports = {
   normalizeRegularHours,
   normalizeManual,
   normalizeFullscreen,
+  normalizeCountdown,
   normalizeSyncSchedule,
   isWithinWindow,
   isRegularHours,
   isFullscreenActive,
+  isCountdownActive,
   computeMode,
   windowsOverlap,
   validateRegularHours,
   validateManual,
   validateFullscreen,
+  validateCountdown,
   validateSyncSchedule,
   shouldSyncAt,
   syncIntervalAt,

@@ -35,6 +35,13 @@ router.get('/state', (req, res) => {
     tickerSpeed: config.tickerSpeed,
     tickerEnabled: config.tickerEnabled,
     fullscreen: getFullscreenMedia(config.fullscreen),
+    countdown: config.countdown
+      ? {
+          enabled: config.countdown.enabled !== false,
+          minutes: config.countdown.minutes,
+          url: `/countdown/Main.dc.html?minutes=${encodeURIComponent(config.countdown.minutes || 5)}`,
+        }
+      : null,
     manualUrl: config.manual && config.manual.enabled ? config.manual.url : null,
     skip: state.skip,
     reload: state.reload,

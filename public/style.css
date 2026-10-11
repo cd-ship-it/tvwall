@@ -463,10 +463,13 @@ body {
   display: block;
 }
 
-#manual-overlay {
+#countdown-overlay {
   pointer-events: auto;
+  z-index: 2100;
+  background: #070a11;
 }
 
+#countdown-frame,
 #manual-frame {
   position: absolute;
   inset: 0;
@@ -474,12 +477,24 @@ body {
   height: 100%;
   border: 0;
   display: none;
-  background: #fff;
   z-index: 1;
 }
 
+#countdown-frame {
+  background: #070a11;
+}
+
+#countdown-frame.visible,
 #manual-frame.visible {
   display: block;
+}
+
+#manual-overlay {
+  pointer-events: auto;
+}
+
+#manual-frame {
+  background: #fff;
 }
 
 .cover-message {

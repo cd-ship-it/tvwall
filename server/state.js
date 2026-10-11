@@ -41,7 +41,7 @@ const state = {
   },
 
   // Current mode as last computed by the scheduler:
-  // 'fullscreen' | 'manual' | 'playlist' | 'off'.
+  // 'countdown' | 'fullscreen' | 'manual' | 'playlist' | 'off'.
   mode: 'off',
 
   // Bumped on every "skip to item" command from /control. The kiosk client
