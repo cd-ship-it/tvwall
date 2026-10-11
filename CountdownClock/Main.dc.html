@@ -51,16 +51,18 @@ a{color:#ffffff}a:hover{color:#e6c46a}
 </div>
 </sc-for>
 <div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{hourDeg}}deg); filter: drop-shadow(0 4px 4px rgba(0,0,0,0.25))">
-<div style="position: absolute; left: 267px; top: 118px; width: 22px; height: 200px; background: #111111"></div>
+<div style="position: absolute; left: 264px; top: 118px; width: 28px; height: 200px; background: #111111"></div>
 </div>
 <div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{minDeg}}deg); filter: drop-shadow(0 6px 5px rgba(0,0,0,0.25))">
-<div style="position: absolute; left: 270px; top: 34px; width: 16px; height: 284px; background: #111111"></div>
+<div style="position: absolute; left: 264px; top: 34px; width: 28px; height: 284px; background: #111111"></div>
 </div>
 <div style="position: absolute; left: 0; top: 0; width: 556px; height: 556px; transform: rotate({{secDeg}}deg); filter: drop-shadow(0 6px 5px rgba(0,0,0,0.22))">
-<div style="position: absolute; left: 276px; top: 30px; width: 4px; height: 318px; background: #c8372d; border-radius: 2px"></div>
-<div style="position: absolute; left: 262px; top: 330px; width: 32px; height: 32px; border-radius: 50%; border: 5px solid #c8372d; box-sizing: border-box; background: #ffffff"></div>
+<!-- asdfas top: 54px height: 310px -->
+<div style="position: absolute; left: 275px; top: 94px; width: 6px; height: 270px; background: #c8372d; border-radius: 3px"></div>
+<!-- asdfas top: 54px height: top: 30px; -->
+<div style="position: absolute; left: 254px; top: 70px; width: 48px; height: 48px; border-radius: 50%; background: #c8372d"></div>
 </div>
-<div style="position: absolute; left: 270px; top: 270px; width: 16px; height: 16px; border-radius: 50%; background: #c8372d"></div>
+<div style="position: absolute; left: 266px; top: 266px; width: 24px; height: 24px; border-radius: 50%; background: #c8372d"></div>
 </div>
 </div>
 
@@ -114,11 +116,7 @@ class Component extends DCLogic {
     if (prevProps && prevProps.minutes !== this.props.minutes) this.restart();
   }
   mins() {
-    let m = Number(this.props.minutes ?? 5);
-    try {
-      const q = new URLSearchParams(location.search).get('minutes');
-      if (q != null && q !== '') m = Number(q);
-    } catch {}
+    const m = Number(this.props.minutes ?? 5);
     return m >= 1 && m <= 99 ? Math.floor(m) : 5;
   }
   fmt(ms) {
@@ -154,8 +152,8 @@ class Component extends DCLogic {
       const ticks = [];
       for (let i = 0; i < 60; i++) {
         const major = i % 5 === 0;
-        const w = major ? 12 : 5;
-        ticks.push({ deg: i * 6, w, h: major ? 46 : 16, ml: -w / 2 });
+        const w = major ? 20 : 6;
+        ticks.push({ deg: i * 6, w, h: major ? 60 : 16, ml: -w / 2 });
       }
       const numerals = [];
       const c = 278, r = 192;
